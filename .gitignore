@@ -1,0 +1,14 @@
+.vs
+.vcode
+build
+install
+bin
+CMakeSettings.json
+CMakeCache.txt
+CMakeFiles
+Makefile
+CMakeScripts
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
