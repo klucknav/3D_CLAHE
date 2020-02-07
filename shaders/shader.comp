@@ -1,0 +1,101 @@
+#version 430
+layout(local_size_x = 32, local_size_y = 32) in;
+layout(rgba16f, binding = 0) uniform image2D inTexture;
+layout(rgba16f, binding = 1) uniform image2D outTexture;
+
+const float PI = 3.14159265359;
+ivec2 SampleMap(vec3 sampleVec) {
+	ivec2 inDims = imageSize(inTexture);
+	vec2 coord = vec2((atan(sampleVec.y, sampleVec.x) + PI) / (2.0*PI), acos(sampleVec.z) / PI);
+	ivec2 pixelCoord = ivec2(ceil(coord * inDims));
+	return pixelCoord;
+}
+
+vec3 GetWorldPos(vec2 fragCoords) {
+	float theta = fragCoords.x * 2.0 * PI;
+	float phi = fragCoords.y * PI;
+									
+	float x = cos(theta)  * sin(phi);	
+	float y = cos(phi);					
+	float z = sin(theta) * sin(phi);	
+	return vec3(x, y, z);				
+}
+
+vec2 GetFragCoords(ivec2 pixelCoords) {
+	vec2 inDims = imageSize(inTexture);	
+	vec2 fragCoords = pixelCoords / inDims;
+									
+	// origin is flipped for fragCoords	
+	//fragCoords.y = 1.0 - fragCoords.y;
+
+	return fragCoords;
+}
+
+ivec2 GetPixelCoords(vec2 fragCoords) {	
+	ivec2 outDims = imageSize(outTexture);	
+										
+	// origin is flipped for fragCoords		
+	//fragCoords.y = 1.0 - fragCoords.y;	
+										
+	return ivec2(ceil(fragCoords * outDims));
+}
+
+
+
+void main() {														
+	// get the index in the global work group (ie. x, y position)		
+	ivec2 pixelCoords = ivec2(gl_GlobalInvocationID.xy);				
+																	
+	// pixel coords needs to be changed/normalized into fragment coords	
+	vec2 fragCoords = GetFragCoords(pixelCoords);						
+	vec3 pos3D = GetWorldPos(fragCoords);								
+	vec3 N = normalize(pos3D);											
+																	
+	// base pixel color													
+	//vec4 pixelColor = vec4(1.0, 0.0, 0.0, 1.0);						
+	//vec4 pixelColor = imageLoad(inTexture, pixelCoords).rgba;			
+	//vec4 pixelColor = vec4(0.0);										
+	//																	
+	// COMPUTE THE THINGS												
+	//float newPixel = .299f*pixelColor.r + .587f*pixelColor.g + .114f*pixelColor.b;
+	//vec4 newPixelColor = vec4(newPixel, newPixel, newPixel, newPixel);
+	//imageStore(outTexture, invertedPixelCoord, newPixelColor);
+	//return;
+
+	// -------------------- Irradiance Convolution -------------------- //
+	vec3 irradiance = vec3(0.0);										
+	vec3 up = vec3(0.0, 1.0, 0.0);										
+	vec3 right = cross(up, N);											
+	up = cross(N, right);												
+	float sampleDelta = 0.125;											
+	float nrSamples = 0.0;												
+																	
+	for (float theta = 0.0; theta < 2.0 * PI; theta += sampleDelta) {	
+		for (float phi = 0.0; phi < 0.5 * PI; phi += sampleDelta) {	
+			
+			// spherical to cartesian (in tangent space)
+			float theta_noise = noise1(theta) / 100.0;
+			float phi_noise = noise1(phi) / 100.0;
+			theta += theta_noise;
+			phi += phi_noise;
+			vec3 tangentSample = vec3(cos(theta) * sin(phi), sin(theta) * sin(phi), cos(phi));
+
+			// tangent space to world
+			vec3 sampleVec = tangentSample.x * right + tangentSample.y * up + tangentSample.z * N;
+
+			// world to lat-long pixel coordinates
+			ivec2 pixelCoords = SampleMap(sampleVec);
+
+			// convert back to pixel to sample the image
+			vec3 temp = imageLoad(inTexture, pixelCoords).rgb;
+			irradiance += temp * cos(phi) * sin(phi);
+			nrSamples++;
+		}
+	}
+	irradiance = PI * irradiance * (1.0 / float(nrSamples));
+	vec4 newPixelColor = vec4(irradiance, 1.0);
+
+	// output to a specific pixel in the image
+	ivec2 outPixels = GetPixelCoords(fragCoords);
+	imageStore(outTexture, outPixels, newPixelColor);
+}

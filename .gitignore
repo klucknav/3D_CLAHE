@@ -3,6 +3,14 @@
 build
 install
 bin
+
+// libraries
+glew
+glew-2.1.0
+glfw
+glm
+
+// CMake 
 CMakeSettings.json
 CMakeCache.txt
 CMakeFiles
@@ -12,3 +20,7 @@ cmake_install.cmake
 install_manifest.txt
 compile_commands.json
 CTestTestfile.cmake
+
+// DICOM files
+Larry
+dicom
