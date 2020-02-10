@@ -5,43 +5,70 @@
 #pragma once
 
 #include <cstdint>
+#include <stdio.h>
+#include <iostream>
 
 #include <glm/glm.hpp>
 
 
-#ifdef BYTE_IMAGE
-typedef unsigned char bit_pixel;	 /* for 8 bit-per-pixel images */
-#define NUM_GRAY_VALS (256)
-#else
-typedef uint16_t bit_pixel;	 /* for 12 bit-per-pixel images (default) */
-# define NUM_GRAY_VALS (4096)
-#endif
+using namespace std;
 
+
+// 8 bit-per-pixel images
+//#ifdef BYTE_IMAGE
+typedef uint16_t bit_pixel;
+#define NUM_GRAY_VALS (256)
+
+//#else
+// 12 bit-per-pixel images
+//typedef uint16_t bit_pixel;
+//# define NUM_GRAY_VALS (4096)
+//#endif
+
+class ImageLoader;
 
 class CLAHE {
 private:
-
+	// for error checking 
 	const unsigned int _maxNumCR_X = 16;
 	const unsigned int _maxNumCR_Y = 16;
 
 
-	static void makeLUT(uint16_t* LUT, uint16_t minVal, uint16_t maxVal, unsigned int numBins);
+	// Image Properties 
+	//ImageLoader* _loadedImage;
+	bit_pixel* _imageData;
+	unsigned int _imgDimX, _imgDimY, _imgDimZ;
 
-	static void makeHistogram(uint16_t*, unsigned int, unsigned int, unsigned int,
-		unsigned long*, unsigned int, uint16_t*);
+	// Grayvalue Properties 
+	unsigned int _minVal, _maxVal, _numBins;
 
-	static void ClipHistogram(unsigned long*, unsigned int, unsigned long);
+	// Contextual Region Properties 
+	unsigned int _numCRx, _numCRy;
 
-	static void MapHistogram(unsigned long*, bit_pixel, bit_pixel,
-		unsigned int, unsigned long);
-	
-	static void Interpolate(bit_pixel*, int, unsigned long*, unsigned long*,
-		unsigned long*, unsigned long*, unsigned int, unsigned int, bit_pixel*);
+	// Contrast Limited Value
+	float _clipLimit;
+
+
+	// Helper Methods
+	void makeLUT(bit_pixel* LUT, unsigned int numBins);
+
+	void makeHistogram(bit_pixel* subImage, unsigned int sizeX, unsigned int sizeY,
+		unsigned long* localHist, unsigned int uiNrGreylevels, bit_pixel* LUT);
+
+	//void clipHistogram(unsigned long*, unsigned int, unsigned long);
+
+	//void mapHistogram(unsigned long*, bit_pixel, bit_pixel,
+	//	unsigned int, unsigned long);
+	//
+	//void interpolate(bit_pixel*, int, unsigned long*, unsigned long*,
+	//	unsigned long*, unsigned long*, unsigned int, unsigned int, bit_pixel*);
+
 public:
+	CLAHE(ImageLoader* img);
+	CLAHE(bit_pixel* img, glm::vec3 imgDims, unsigned int min, unsigned int max);
+	~CLAHE();
 
-	int CLAHE_2D(uint16_t* image, glm::uvec2 imgDims, uint16_t minVal,
-		uint16_t maxVal, glm::uvec2 numCR, unsigned int numBins, float cliplimit);
-
-	void CLAHE_3D();
+	int CLAHE_2D(unsigned int numCRx, unsigned int numCRy, unsigned int numBins, float clipLimit);
+	//void CLAHE_3D();
 
 };

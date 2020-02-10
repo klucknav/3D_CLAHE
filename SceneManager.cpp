@@ -5,6 +5,7 @@
 #include "SceneManager.h"
 #include "Shader.h"
 #include "ImageLoader.h"
+#include "CLAHE.h"
 
 #include <stdio.h>
 
@@ -15,6 +16,8 @@ GLFWwindow* SceneManager::_window;
 
 // Scene Variables
 Camera* SceneManager::_camera;
+ImageLoader* _dicomImage;
+ImageLoader* _dicomVolume;
 GLuint SceneManager::_dicomTexture;
 GLuint SceneManager::_dicomVolumeTexture;
 Cube* SceneManager::_dicomCube;
@@ -90,17 +93,25 @@ void SceneManager::InitScene() {
 	
 	// initialize Scene 
 	_drawVolume = false;
-	glm::vec3 imgDims, volDims;
+	glm::vec3 size, imgDims, volDims;
 
 	// Single Texture
 	glGenVertexArrays(1, &_VAO);
 	std::string path = std::string("C:/Users/kroth/Documents/UCSD/Grad/Thesis/clahe_2/dicom/sample.dcm");
-	_dicomTexture = ImageLoader::LoadImage(path, imgDims);
+	ImageLoader* _dicomImage = new ImageLoader(path);
+	_dicomTexture = _dicomImage->GetTextureID();
+	//const void* _imgData = _dicomImage->GetImageData();
+
+	// CLAHE:
+	//CLAHE * _test = new CLAHE(_imgData, imgDims, 0, 256);
+	CLAHE * _test = new CLAHE(_dicomImage);
+	_test->CLAHE_2D(4, 4, 256, 0.85f);
 
 	// Cube Volume 
-	_dicomCube = new Cube();
-	std::string folderPath = std::string("C:/Users/kroth/Documents/UCSD/Grad/Thesis/clahe_2/Larry");
-	_dicomVolumeTexture = ImageLoader::LoadVolume(folderPath, volDims);
+	//_dicomCube = new Cube();
+	//std::string folderPath = std::string("C:/Users/kroth/Documents/UCSD/Grad/Thesis/clahe_2/Larry");
+	//ImageLoader* _dicomVolume = new ImageLoader(folderPath, false);
+	//_dicomVolumeTexture = _dicomVolume->GetTextureID();
 
 }
 
@@ -113,6 +124,8 @@ void SceneManager::ClearScene() {
 
 	delete _camera;
 	delete _dicomCube;
+	delete _dicomImage;
+	//delete _dicomVolume;
 
 	glfwDestroyWindow(_window);
 }
@@ -166,7 +179,7 @@ void SceneManager::KeyCallback(GLFWwindow* window, int key, int scancode, int ac
 				break;
 			case GLFW_KEY_T:
 				// swap between the cube and the flat image
-				_drawVolume = !_drawVolume;
+				//_drawVolume = !_drawVolume;
 				break;
 			case GLFW_KEY_R:
 				// reset the camera view 

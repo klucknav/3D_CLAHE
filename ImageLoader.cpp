@@ -13,7 +13,6 @@
 #include <dcmtk/dcmdata/dctk.h>
 
 #include <thread>
-#include <vector>
 #include <algorithm>
 
 #include "ImageLoader.h"
@@ -174,9 +173,9 @@ void ReadDicomImages(uint16_t* data, vector<Slice>& images, int j, int k, int w,
 ////////////////////////////////////////////////////////////////////////////////
 // Dicom Loaders
 
-GLuint LoadDicomImage(const string& path, glm::vec3& size) {
+GLuint ImageLoader::loadDicomImage() {
 
-	printf("Loading Dicom file: %s\n", path.c_str());
+	printf("Loading Dicom file: %s\n", _path.c_str());
 
 	// Get information
 	DicomImage* image = nullptr;
@@ -184,28 +183,40 @@ GLuint LoadDicomImage(const string& path, glm::vec3& size) {
 	double spacingX = 0.0;
 	double spacingY = 0.0;
 	double thickness = 0.0;
-	ReadDicomSlice(image, x, path, spacingX, spacingY, thickness);
+	ReadDicomSlice(image, x, _path, spacingX, spacingY, thickness);
 
 	unsigned int w = image->getWidth();
 	unsigned int h = image->getHeight();
 	unsigned int d = 1;
 
+	_imgDims.x = w;
+	_imgDims.y = h;
+	_imgDims.z = d;
+
 	// volume size in meters
-	size.x = .001f * (float)spacingX * w;
-	size.y = .001f * (float)spacingY * h;
-	size.z = .001f * (float)thickness;
+	_size.x = .001f * (float)spacingX * w;
+	_size.y = .001f * (float)spacingY * h;
+	_size.z = .001f * (float)thickness;
 
-	uint16_t* data = new uint16_t[w * h * d];
-	memset(data, 0xFF, w * h * d * sizeof(uint16_t));
-	ReadDicomImage(image, data, w, h);
+	_imageData = new uint16_t[w * h * d];
+	memset(_imageData, 0xFF, w * h * d * sizeof(uint16_t));
+	ReadDicomImage(image, _imageData, w, h);
 
-	GLuint tex = InitTexture2D(w, h, GL_R16, GL_RED, GL_UNSIGNED_SHORT, GL_LINEAR, data);
-	delete[] data;
-	cerr << "Dicom loaded: (" << tex << ")\n";
+	// get the raw data 
+	//_dataTest = (uint16_t*)_imageData; 
+	_dataTest = (uint16_t*)image->getOutputData();
+
+	// Get the Min/Max values for the Dicom Image
+	int mode = 0;	// mode = used pixel values vs 1 = possible pixelvalues
+	image->getMinMaxValues(_minPixelVal, _maxPixelVal, mode);
+
+	GLuint tex = InitTexture2D(w, h, GL_R16, GL_RED, GL_UNSIGNED_SHORT, GL_LINEAR, _imageData);
+	//delete[] data;
+	cerr << "Dicom loaded: (" << tex << ")\n\n";
 	return tex;
 }
 
-GLuint LoadDicomVolume(const vector<string>& files, glm::vec3& size) {
+GLuint ImageLoader::loadDicomVolume(const vector<string>& files) {
 
 	std::cerr << "Loading DICOM Folder\n";
 
@@ -232,95 +243,91 @@ GLuint LoadDicomVolume(const vector<string>& files, glm::vec3& size) {
 	unsigned int d = (unsigned int)images.size();
 
 	// volume size in meters
-	size.x = .001f * (float)spacingX * w;
-	size.y = .001f * (float)spacingY * h;
-	size.z = .001f * (float)thickness * images.size();
+	_size.x = .001f * (float)spacingX * w;
+	_size.y = .001f * (float)spacingY * h;
+	_size.z = .001f * (float)thickness * images.size();
 
-	printf("%fm x %fm x %fm\n", size.x, size.y, size.z);
+	printf("%fm x %fm x %fm\n", _size.x, _size.y, _size.z);
 
-	uint16_t* data = new uint16_t[w * h * d * 2];
-	memset(data, 0xFFFF, w * h * d * sizeof(uint16_t) * 2);
+	_imageData = new uint16_t[w * h * d * 2];
+	memset(_imageData, 0xFFFF, w * h * d * sizeof(uint16_t) * 2);
 
 	if (THREAD_COUNT > 1) {
 		printf("reading %d slices\n", d);
 		vector<thread> threads;
 		int s = ((int)images.size() + THREAD_COUNT - 1) / THREAD_COUNT;
 		for (int i = 0; i < (int)images.size(); i += s)
-			threads.push_back(thread(ReadDicomImages, data, images, i, i + s, w, h));
+			threads.push_back(thread(ReadDicomImages, _imageData, images, i, i + s, w, h));
 		for (int i = 0; i < (int)threads.size(); i++)
 			threads[i].join();
 	}
 	else {
-		ReadDicomImages(data, images, 0, (int)images.size(), w, h);
+		ReadDicomImages(_imageData, images, 0, (int)images.size(), w, h);
 	}
 
-	GLuint tex = InitTexture3D(w, h, d, GL_R16, GL_RED, GL_UNSIGNED_SHORT, GL_LINEAR, data);
-	delete[] data;
-
+	GLuint tex = InitTexture3D(w, h, d, GL_R16, GL_RED, GL_UNSIGNED_SHORT, GL_LINEAR, _imageData);
+	//delete[] data;
+	cerr << "Dicom Volume loaded: (" << tex << ")\n\n";
 	return tex;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 // Image/Volume Loaders 
 
-GLuint ImageLoader::LoadImage(const string& path, glm::vec3& size) {
+GLuint ImageLoader::loadImage() {
 #ifdef WIN32
-	if (!PathFileExists(path.c_str())) {
+	if (!PathFileExists(_path.c_str())) {
 #endif
-		printf("%s Does not exist!\n", path.c_str());
+		printf("%s Does not exist!\n", _path.c_str());
 		return 0;
 	}
 
-	string ext = GetExt(path.c_str());
+	string ext = GetExt(_path.c_str());
 	if (ext == "dcm")
-		return LoadDicomImage(path, size);
+		return loadDicomImage();
 	else
 		return 0;
 }
 
-GLuint ImageLoader::LoadVolume(const string& path, glm::vec3& size) {
+GLuint ImageLoader::loadVolume() {
 #ifdef WIN32
-	if (!PathFileExists(path.c_str())) {
+	if (!PathFileExists(_path.c_str())) {
 #endif
-		printf("%s Does not exist!\n", path.c_str());
+		printf("%s Does not exist!\n", _path.c_str());
 		return 0;
 	}
 
 	vector<string> files;
-	GetFiles(path, files);
+	GetFiles(_path, files);
 
 	if (files.size() == 0) return 0;
 
 	string ext = GetExt(files[0]);
 	if (ext == "dcm")
-		return LoadDicomVolume(files, size);
+		return loadDicomVolume(files);
 	else
 		return 0;
 }
 
-/*void ImageLoader::LoadMask(const string& path, const GLuint& texture) {
-#ifdef WIN32
-	if (!PathFileExists(path.c_str())) {
-#endif
-		printf("%s Does not exist!\n", path.c_str());
-		return;
-	}
+////////////////////////////////////////////////////////////////////////////////
+// Constructor/Destructor
 
-	vector<string> files;
-	GetFiles(path, files);
-	
-	if (files.size() != texture->Depth()) {
-		printf("Incorrect slice count! (%u != %u)\n", (unsigned int)files.size(), texture->Depth());
-		return;
-	}
+ImageLoader::ImageLoader(string& path, bool isImg) {
 
-	std::sort(files.data(), files.data() + files.size(), [](const string& a, const string& b) {
-		return atoi(GetName(a).c_str()) > atoi(GetName(b).c_str());
-		});
+	_path = path;
 
-	for (unsigned int i = 0; i < files.size(); i++) {
-		// TODO: load into new texture and blit over
+	if (isImg) {
+		cerr << "Load Image\n";
+		_textureID = loadImage();
 	}
-}*/
+	else {
+		cerr << "Load Volume\n";
+		_textureID = loadVolume();
+	}
+}
+
+ImageLoader::~ImageLoader() {
+	delete[] _imageData;
+}
 
 ////////////////////////////////////////////////////////////////////////////////

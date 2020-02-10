@@ -34,12 +34,12 @@ void Camera::Update() {
 	_viewProjectMtx = project * view;
 }
 
-void Camera::UpdateAngles(float a, float i) {
+void Camera::UpdateAngles(int a, int i) {
 	_azimuth = _azimuth + a * _angleRate;
 	_incline = glm::clamp(_incline - i * _angleRate, -90.0f, 90.0f);
 }
 
-void Camera::UpdateDistance(float d) {
+void Camera::UpdateDistance(int d) {
 	_distance = glm::clamp(_distance * (1.0f - d * _distanceRate), 0.01f, 1000.0f);
 }
 

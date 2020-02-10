@@ -99,7 +99,7 @@ GLuint LinkProgram(GLuint shaderID_1, GLuint shaderID_2=0) {
 	}
 	else
 	{
-		printf("Successfully linked program!\n");
+		printf("Successfully linked program!\n\n");
 	}
 
 	return programID;

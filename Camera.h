@@ -33,8 +33,8 @@ public:
 	void Reset();
 
 	// Update values
-	void UpdateAngles(float a, float i);
-	void UpdateDistance(float d);
+	void UpdateAngles(int a, int i);
+	void UpdateDistance(int d);
 
 	// Setters and Getters 
 	void SetAspect(float a)		{ _aspect = a; }
