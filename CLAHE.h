@@ -16,13 +16,13 @@ using namespace std;
 
 // 8 bit-per-pixel images
 //#ifdef BYTE_IMAGE
-typedef uint16_t bit_pixel;
-#define NUM_GRAY_VALS (256)
+//typedef uint16_t bit_pixel;
+//#define NUM_GRAY_VALS (256)
 
 //#else
 // 12 bit-per-pixel images
-//typedef uint16_t bit_pixel;
-//# define NUM_GRAY_VALS (4096)
+typedef uint16_t bit_pixel;
+# define NUM_GRAY_VALS (4096)
 //#endif
 
 class ImageLoader;
@@ -52,16 +52,15 @@ private:
 	// Helper Methods
 	void makeLUT(bit_pixel* LUT, unsigned int numBins);
 
-	void makeHistogram(bit_pixel* subImage, unsigned int sizeX, unsigned int sizeY,
-		unsigned long* localHist, unsigned int uiNrGreylevels, bit_pixel* LUT);
+	void makeHistogram(bit_pixel* subImage, unsigned int sizeCRx, unsigned int sizeCRy,
+						unsigned long* localHist, unsigned int numBins, uint16_t* LUT);
 
-	//void clipHistogram(unsigned long*, unsigned int, unsigned long);
+	void clipHistogram(float clipLimit, unsigned int numBins, unsigned long* localHist);
 
-	//void mapHistogram(unsigned long*, bit_pixel, bit_pixel,
-	//	unsigned int, unsigned long);
-	//
-	//void interpolate(bit_pixel*, int, unsigned long*, unsigned long*,
-	//	unsigned long*, unsigned long*, unsigned int, unsigned int, bit_pixel*);
+	void mapHistogram(unsigned long* localHist, unsigned int numBins, unsigned long numPixelsCR);
+
+	void lerp_2D(uint16_t* image, unsigned long* LU, unsigned long* RU, unsigned long* LD, 
+				unsigned long* RD, unsigned int sizeX, unsigned int sizeY, uint16_t* LUT);
 
 public:
 	CLAHE(ImageLoader* img);

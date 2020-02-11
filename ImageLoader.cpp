@@ -204,7 +204,8 @@ GLuint ImageLoader::loadDicomImage() {
 
 	// get the raw data 
 	//_dataTest = (uint16_t*)_imageData; 
-	_dataTest = (uint16_t*)image->getOutputData();
+	_dataTest = (uint16_t*)image->getOutputData(12);
+	//_dataTest = (uint16_t*)image->getInterData();
 
 	// Get the Min/Max values for the Dicom Image
 	int mode = 0;	// mode = used pixel values vs 1 = possible pixelvalues

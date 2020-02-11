@@ -105,7 +105,7 @@ void SceneManager::InitScene() {
 	// CLAHE:
 	//CLAHE * _test = new CLAHE(_imgData, imgDims, 0, 256);
 	CLAHE * _test = new CLAHE(_dicomImage);
-	_test->CLAHE_2D(4, 4, 256, 0.85f);
+	_test->CLAHE_2D(4, 4, 4096, 0.85f);
 
 	// Cube Volume 
 	//_dicomCube = new Cube();
