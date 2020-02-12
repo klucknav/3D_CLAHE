@@ -50,7 +50,7 @@ public:
 	GLuint GetTextureID()			{ return _textureID; }
 	glm::vec3 GetSize()				{ return _size; }
 	glm::vec3 GetImageDimensions()	{ return _imgDims; }
-	uint16_t* GetImageData()		{ return _dataTest; }
+	uint16_t* GetImageData()		{ return _imageData; }
 	double GetMinPixelValue()		{ return _minPixelVal; }
 	double GetMaxPixelValue()		{ return _maxPixelVal; }
 };

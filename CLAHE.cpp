@@ -92,7 +92,8 @@ void CLAHE::makeLUT(bit_pixel* LUT, unsigned int numBins) {
 
 	// calculate the size of the bins
 	const uint16_t binSize = (uint16_t)(1 + ((_maxVal - _minVal) / numBins));
-	cerr << "binSize: " << binSize << " numBins: " << numBins << endl;
+	//cerr << "binSize: " << binSize << " numBins: " << numBins << endl;
+	//cerr << "_maxVal: " << _maxVal << " _minVal: " << _minVal << endl;
 
 	// build up the LUT
 	for (unsigned int index = _minVal; index <= _maxVal; index++) {
@@ -100,6 +101,7 @@ void CLAHE::makeLUT(bit_pixel* LUT, unsigned int numBins) {
 		LUT[index] = (index - _minVal) / binSize;
 		//cerr << "(index: " << index << " val: " << (index - _minVal) / binSize << ")\n";
 	}
+	//cerr << "LUT end\n";
 }
 
 // build the histogram of the given image and dimensions 
@@ -127,11 +129,12 @@ void CLAHE::makeHistogram(bit_pixel* subImage, unsigned int sizeCRx, unsigned in
 			// get color from the CR(sub_img) 
 			// - map it to the values used (LUT)
 			// - increment the histogram for that grayvalue
+			localHist[ LUT[*subImage++] ]++;
+
 			//uint16_t index1 = *subImage++;
 			//uint16_t index2 = LUT[index1];
 			//cerr << "color: " << index1 << " newColor: " << index2 << endl;
 			//localHist[index2] += 1;	
-			localHist[ LUT[*subImage++] ]++;
 		}
 		// go to beginning of next row 
 		imagePointer += _imgDimX;
@@ -221,7 +224,9 @@ void CLAHE::clipHistogram(float clipLimit, unsigned int numBins, unsigned long* 
 
 
 // Map the Histogram
-// 
+// calculate the equalized lookup table (mapping) by cqlculating the CDF 
+// NOTE: lookup table is rescaled in range[min...max]
+// Max and Min are same as for the LUT creation
 void CLAHE::mapHistogram(unsigned long* localHist, unsigned int numBins, unsigned long numPixelsCR) {
 
 	unsigned long sum = 0;
@@ -237,61 +242,42 @@ void CLAHE::mapHistogram(unsigned long* localHist, unsigned int numBins, unsigne
 		localHist[i] = (unsigned long)(min(_minVal + sum * scale, (float)_maxVal));
 	}
 }
-// bilinear interpolation between the 4 loal mapped histograms LU, RU, LB, & RB
-// sizeX, sizeY = size of subImage we are interpolating over
-// bins = num gray values using
-void CLAHE::lerp_2D(uint16_t* imgPointer, unsigned long* LU, unsigned long* RU,
+
+// Lerp in 2D
+// LU, RU, LB, RB - loal mapped histograms 
+// sizeX, sizeY   - size of subImage we are interpolating over
+// LUT			  - mapping from image's gray values to the desired gray value range
+void CLAHE::lerp2D(uint16_t* imgPointer, unsigned long* LU, unsigned long* RU,
 	unsigned long* LB, unsigned long* RB, unsigned int sizeX, unsigned int sizeY, uint16_t* LUT) {
 	
 	// Normalization factor
 	unsigned int normFactor = sizeX * sizeY;
 
-	// If normalization factor is not a power of two -> use division
-	if (normFactor & (normFactor - 1)) {
+	// for each pixel in the subImage
+	for (unsigned int a = 0; a < sizeY; a++, imgPointer += _imgDimX - sizeX) {
+		unsigned int aInv = sizeY - a;
 
-		// for each pixel in the subImage
-		for (unsigned int a = 0; a < sizeY; a++, imgPointer += _imgDimX - sizeX) {
-			unsigned int aInv = sizeY - a;
+		for (unsigned int b = 0;  b < sizeX; b++) {
+			unsigned int bInv = sizeX - b;
 
-			for (unsigned int b = 0;  b < sizeX; b++) {
-				unsigned int bInv = sizeX - b;
+			uint16_t greyValue = LUT[*imgPointer];
 
-				// get the greyvalue from the LUT
-				cerr << "test: " << *imgPointer << endl;
-				uint16_t greyValue = LUT[*imgPointer];
-				cerr << "Grayval: " << greyValue << endl;
-				// bilinearly interpolate the mapped histograms (LU, RU, LB, RB)
-				*imgPointer++ = (uint16_t)((aInv * (bInv * LU[greyValue] + b * RU[greyValue])
-											+ a  * (bInv * LB[greyValue] + b * RB[greyValue])) / normFactor);
-			}
-		}
-	}
-	// avoid the division and use a right shift instead 
-	else {
-		// Calculate 2log of normalization factor
-		unsigned int shiftVal = 0;
-		while (normFactor >>= 1) {
+			// bilinearly interpolate the mapped histograms (LU, RU, LB, RB)
+			unsigned int p1 = bInv * LU[greyValue] + b * RU[greyValue];
+			unsigned int p2 = bInv * LB[greyValue] + b * RB[greyValue];
+			unsigned int ans = ((aInv * p1 + a * p2) / normFactor);
 
-			shiftVal++;
-			for (unsigned int a = 0; a < sizeY; a++, imgPointer += _imgDimX - sizeX) {
-				unsigned int aInv = sizeY - a;
+			*imgPointer++ = (uint16_t)ans;
 
-				for (unsigned int b = 0; b < sizeX; b++) {
-					unsigned int bInv = sizeX - b;
-
-					// get histogram bin value
-					uint16_t greyValue = LUT[*imgPointer];
-
-					*imgPointer++ = (uint16_t)((aInv * (bInv * LU[greyValue] + b * RU[greyValue])
-												+ a * (bInv * LB[greyValue] + b * RB[greyValue])) >> shiftVal);
-				}
-			}
+			//*imgPointer++ = (uint16_t)((aInv * (bInv * LU[greyValue] + b * RU[greyValue])
+			//							+ a  * (bInv * LB[greyValue] + b * RB[greyValue])) / normFactor);
 		}
 	}
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-
+// 2D version of CLAHE
+//
 // image	- Pointer to the input/output image
 // imgDims	- Image resolution in the X/Y directions
 // Min		- Minimum greyvalue of input image (also becomes minimum of output image)
@@ -317,11 +303,11 @@ int CLAHE::CLAHE_2D(unsigned int numCRx, unsigned int numCRy, unsigned int numBi
 
 	printf("Num Contextual Regions: %i, %i, Image size: %i, %i\n", numCRx, numCRy, _imgDimX, _imgDimY);
 	printf("Size of Contextual Regions: %d, %d, each with %d pixels\n\n", sizeCRx, sizeCRy, numPixelsCR);
-	printf("Make LUT...Image Range: [%d, %d]\n", _minVal, _maxVal);
+	printf("Make LUT...Image Range: [%d, %d], numBins: %d\n", _minVal, _maxVal, numBins);
 
 	// Make the LUT - to scale the input image
+	//cerr << "range: " << _maxVal - _minVal << endl;
 	uint16_t* LUT = new uint16_t[NUM_GRAY_VALS];
-	cerr << "range: " << _maxVal - _minVal << endl;
 	makeLUT(LUT, numBins); // <- issue
 
 	// pointer to mappings (bins)
@@ -332,12 +318,8 @@ int CLAHE::CLAHE_2D(unsigned int numCRx, unsigned int numCRy, unsigned int numBi
 	printf("build local histograms...\n");
 	uint16_t* imgPointer = _imageData;
 	for (unsigned int currCRy = 0; currCRy < numCRy; currCRy++) {
-		unsigned int startY = currCRy * sizeCRy;
-		unsigned int endY = (currCRy + 1) * sizeCRy;
 
 		for (unsigned int currCRx = 0; currCRx < numCRx; currCRx++, imgPointer += sizeCRx) {
-			unsigned int startX = currCRx * sizeCRx;
-			unsigned int endX = (currCRx + 1) * sizeCRx;
 
 			// calculate the local histogram for the given contextual region
 			currHist = &mappedHist[numBins * (currCRy * numCRx + currCRx)];
@@ -363,38 +345,38 @@ int CLAHE::CLAHE_2D(unsigned int numCRx, unsigned int numCRy, unsigned int numBi
 
 		// top row
 		if (currCRy == 0) {	
-			subY = sizeCRy >> 1;  
-			yUp = 0;				yDown = 0;
+			subY = sizeCRy / 2;  
+			yUp = 0;			yDown = 0;
 		}
 		else {
 			// bottom row
 			if (currCRy == numCRy) {
-				subY = (sizeCRy + 1) >> 1;
-				yUp = numCRy - 1;				yDown = yUp;
+				subY = (sizeCRy + 1) / 2;
+				yUp = numCRy - 1;			yDown = yUp;
 			}
 			// default values
 			else {
 				subY = sizeCRy;
-				yUp = currCRy - 1;			yDown = yUp + 1;
+				yUp = currCRy - 1;			yDown = currCRy;
 			}
 		}
 		for (unsigned int currCRx = 0; currCRx <= numCRx; currCRx++) {
 
 			// left column
 			if (currCRx == 0) {
-				subX = sizeCRx >> 1; 
+				subX = sizeCRx / 2; 
 				xLeft = 0;			xRight = 0;
 			}
 			else {
 				// special case: right column
 				if (currCRx == numCRx) {
-					subX = (sizeCRx + 1) >> 1;
+					subX = (sizeCRx + 1) / 2;
 					xLeft = numCRx - 1;				xRight = xLeft;
 				}
 				// default values
 				else {
 					subX = sizeCRx;
-					xLeft = numCRx - 1;				xRight = xLeft + 1;
+					xLeft = currCRx - 1;			xRight = currCRx;
 				}
 			}
 
@@ -402,7 +384,13 @@ int CLAHE::CLAHE_2D(unsigned int numCRx, unsigned int numCRy, unsigned int numBi
 			R_Up = &mappedHist[numBins * (yUp   * numCRx + xRight)];
 			L_Dn = &mappedHist[numBins * (yDown * numCRx + xLeft )];
 			R_Dn = &mappedHist[numBins * (yDown * numCRx + xRight)];
-			lerp_2D(imgPointer, L_Up, R_Up, L_Dn, R_Dn, subX, subY, LUT);
+
+			cerr << "L_up: " << numBins * (yUp * numCRx + xLeft) << endl;
+			cerr << "R_up: " << numBins * (yUp * numCRx + xRight) << endl;
+			cerr << "L_dn: " << numBins * (yDown * numCRx + xLeft) << endl;
+			cerr << "R_dn: " << numBins * (yDown * numCRx + xRight) << endl;
+			cerr << "-----\n";
+			lerp2D(imgPointer, L_Up, R_Up, L_Dn, R_Dn, subX, subY, LUT);
 
 			imgPointer += subX;
 		}
@@ -414,7 +402,20 @@ int CLAHE::CLAHE_2D(unsigned int numCRx, unsigned int numCRy, unsigned int numBi
 	delete[] LUT;
 
 	cerr << "fin\n";
-	return 0;
+
+	// store the new data as a texture 
+	GLuint textureID;
+	glGenTextures(1, &textureID);
+	glBindTexture(GL_TEXTURE_2D, textureID);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_R16, _imgDimX, _imgDimY, 0, GL_RED, GL_UNSIGNED_SHORT, (void*)_imageData);
+
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+	glBindTexture(GL_TEXTURE_2D, 0);
+	return textureID;
 }
 
 ////////////////////////////////////////////////////////////////////////////////

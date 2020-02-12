@@ -19,6 +19,8 @@ Camera* SceneManager::_camera;
 ImageLoader* _dicomImage;
 ImageLoader* _dicomVolume;
 GLuint SceneManager::_dicomTexture;
+GLuint _newDicomTexture;
+bool _newTexture;
 GLuint SceneManager::_dicomVolumeTexture;
 Cube* SceneManager::_dicomCube;
 bool SceneManager::_drawVolume;
@@ -105,7 +107,9 @@ void SceneManager::InitScene() {
 	// CLAHE:
 	//CLAHE * _test = new CLAHE(_imgData, imgDims, 0, 256);
 	CLAHE * _test = new CLAHE(_dicomImage);
-	_test->CLAHE_2D(4, 4, 4096, 0.85f);
+	_newDicomTexture = _test->CLAHE_2D(2, 2, 65536, 0.85f);
+	cerr << "new TextureID: " << _newDicomTexture << endl;
+	_newTexture = false;
 
 	// Cube Volume 
 	//_dicomCube = new Cube();
@@ -158,7 +162,12 @@ void SceneManager::Draw() {
 		glUseProgram(_displayShader);
 		glBindVertexArray(_VAO);
 		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, _dicomTexture);
+		if (_newTexture) {
+			glBindTexture(GL_TEXTURE_2D, _newDicomTexture);
+		}
+		else {
+			glBindTexture(GL_TEXTURE_2D, _dicomTexture);
+		}
 		glDrawArrays(GL_TRIANGLES, 0, 3);
 	}
 
@@ -184,6 +193,9 @@ void SceneManager::KeyCallback(GLFWwindow* window, int key, int scancode, int ac
 			case GLFW_KEY_R:
 				// reset the camera view 
 				_camera->Reset();
+				break;
+			case GLFW_KEY_N:
+				_newTexture = !_newTexture;
 				break;
 		}
 	}

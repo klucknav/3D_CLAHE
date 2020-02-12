@@ -4,12 +4,11 @@
 
 #pragma once
 
+#include <glm/glm.hpp>
+
 #include <cstdint>
 #include <stdio.h>
 #include <iostream>
-
-#include <glm/glm.hpp>
-
 
 using namespace std;
 
@@ -22,7 +21,8 @@ using namespace std;
 //#else
 // 12 bit-per-pixel images
 typedef uint16_t bit_pixel;
-# define NUM_GRAY_VALS (4096)
+//# define NUM_GRAY_VALS (4096)
+# define NUM_GRAY_VALS (65536)
 //#endif
 
 class ImageLoader;
@@ -59,7 +59,7 @@ private:
 
 	void mapHistogram(unsigned long* localHist, unsigned int numBins, unsigned long numPixelsCR);
 
-	void lerp_2D(uint16_t* image, unsigned long* LU, unsigned long* RU, unsigned long* LD, 
+	void lerp2D(uint16_t* image, unsigned long* LU, unsigned long* RU, unsigned long* LD, 
 				unsigned long* RD, unsigned int sizeX, unsigned int sizeY, uint16_t* LUT);
 
 public:
