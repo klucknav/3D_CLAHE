@@ -243,6 +243,10 @@ GLuint ImageLoader::loadDicomVolume(const vector<string>& files) {
 	unsigned int h = images[0].image->getHeight();
 	unsigned int d = (unsigned int)images.size();
 
+	_imgDims.x = w;
+	_imgDims.y = h;
+	_imgDims.z = d;
+
 	// volume size in meters
 	_size.x = .001f * (float)spacingX * w;
 	_size.y = .001f * (float)spacingY * h;
@@ -250,8 +254,8 @@ GLuint ImageLoader::loadDicomVolume(const vector<string>& files) {
 
 	printf("%fm x %fm x %fm\n", _size.x, _size.y, _size.z);
 
-	_imageData = new uint16_t[w * h * d * 2];
-	memset(_imageData, 0xFFFF, w * h * d * sizeof(uint16_t) * 2);
+	_imageData = new uint16_t[w * h * d];
+	memset(_imageData, 0xFFFF, w * h * d * sizeof(uint16_t));
 
 	if (THREAD_COUNT > 1) {
 		printf("reading %d slices\n", d);

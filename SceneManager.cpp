@@ -22,6 +22,7 @@ GLuint SceneManager::_dicomTexture;
 GLuint _newDicomTexture;
 bool _newTexture;
 GLuint SceneManager::_dicomVolumeTexture;
+GLuint _newDicomVolumeTexture;
 Cube* SceneManager::_dicomCube;
 bool SceneManager::_drawVolume;
 
@@ -97,26 +98,72 @@ void SceneManager::InitScene() {
 	_drawVolume = false;
 	glm::vec3 size, imgDims, volDims;
 
-	// Single Texture
+	// 2D CLAHE - Single Texture
 	glGenVertexArrays(1, &_VAO);
 	std::string path = std::string("C:/Users/kroth/Documents/UCSD/Grad/Thesis/clahe_2/dicom/sample.dcm");
 	ImageLoader* _dicomImage = new ImageLoader(path);
 	_dicomTexture = _dicomImage->GetTextureID();
-	//const void* _imgData = _dicomImage->GetImageData();
 
-	// CLAHE:
-	//CLAHE * _test = new CLAHE(_imgData, imgDims, 0, 256);
+	// 2D CLAHE:
+	unsigned int numCRx = 2, numCRy = 2;
+	unsigned int numGrayValsFinal = 65536;
+	float clipLimit = 0.85f;
+
 	CLAHE * _test = new CLAHE(_dicomImage);
-	_newDicomTexture = _test->CLAHE_2D(2, 2, 65536, 0.85f);
-	cerr << "new TextureID: " << _newDicomTexture << endl;
+	GLuint result = _test->CLAHE_2D(numCRx, numCRy, numGrayValsFinal, clipLimit);
+	if (result > 0) {
+		_newDicomTexture = result;
+	}
+
+	// 3D CLAHE - Cube Volume 
+	_dicomCube = new Cube();
+	std::string folderPath = std::string("C:/Users/kroth/Documents/UCSD/Grad/Thesis/clahe_2/Larry");
+	ImageLoader* _dicomVolume = new ImageLoader(folderPath, false);
+	_dicomVolumeTexture = _dicomVolume->GetTextureID();
+
+	// 3D CLAHE
+	CLAHE* _volumeTest = new CLAHE(_dicomVolume);
+	//CLAHE* _volumeTest = new CLAHE(_dicomImage);
+
+	unsigned int numCRz = 1;
+	result = _volumeTest->CLAHE_3D(numCRx, numCRy, numCRz, numGrayValsFinal, clipLimit);
+	if (result > 0) {
+		_newDicomVolumeTexture = result;
+	}
+
+	////////////////////////////////////////////////////////////////////////////
+	// Fake Data for Testing
+	//int w = 8;
+	//int h = 8;
+	//int d = 1;
+	//glm::vec3 fakeDims = glm::vec3(w, h, d);
+	//int fakeSize = w * h * d;
+	//uint16_t* fakeImage = new uint16_t[fakeSize];
+	////cerr << "fakeImage: \n";
+	//for (unsigned int i = 0; i < fakeSize; i++) {
+	//	fakeImage[i] = i;
+	//	//cerr << "(" << i << ", " << fakeImage[i] << ")\n";
+	//}
+	////cerr << endl << endl;
+	//CLAHE* _imageTest = new CLAHE(fakeImage, fakeDims, 0, fakeSize - 1);
+	//result = _imageTest->CLAHE_2D(2, 2, fakeSize, 0.85);
+	//w = 8;
+	//h = 8;
+	//d = 2;
+	//fakeDims = glm::vec3(w, h, d);
+	//fakeSize = w * h * d;
+	//uint16_t* fakeVol = new uint16_t[fakeSize];
+	////cerr << "fakeImage: \n";
+	//for (unsigned int i = 0; i < fakeSize; i++) {
+	//	fakeVol[i] = i;
+	//	//cerr << "(" << i << ", " << fakeImage[i] << ")\n";
+	//}
+	////cerr << endl << endl;
+	//CLAHE* _volumeTest = new CLAHE(fakeVol, fakeDims, 0, fakeSize-1);
+	//result = _volumeTest->CLAHE_3D(2, 2, 2, fakeSize, 0.85);
+	////////////////////////////////////////////////////////////////////////////
+
 	_newTexture = false;
-
-	// Cube Volume 
-	//_dicomCube = new Cube();
-	//std::string folderPath = std::string("C:/Users/kroth/Documents/UCSD/Grad/Thesis/clahe_2/Larry");
-	//ImageLoader* _dicomVolume = new ImageLoader(folderPath, false);
-	//_dicomVolumeTexture = _dicomVolume->GetTextureID();
-
 }
 
 void SceneManager::ClearScene() {
@@ -154,7 +201,12 @@ void SceneManager::Draw() {
 	if (_drawVolume) {
 		glEnable(GL_BLEND);
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-		_dicomCube->Draw(_volumeShader, _camera->GetViewProjectMtx(), _camera->GetCamPos(), _dicomVolumeTexture);
+		if (_newTexture) {
+			_dicomCube->Draw(_volumeShader, _camera->GetViewProjectMtx(), _camera->GetCamPos(), _newDicomVolumeTexture);
+		}
+		else {
+			_dicomCube->Draw(_volumeShader, _camera->GetViewProjectMtx(), _camera->GetCamPos(), _dicomVolumeTexture);
+		}
 	}
 
 	// draw the texture 
@@ -188,7 +240,7 @@ void SceneManager::KeyCallback(GLFWwindow* window, int key, int scancode, int ac
 				break;
 			case GLFW_KEY_T:
 				// swap between the cube and the flat image
-				//_drawVolume = !_drawVolume;
+				_drawVolume = !_drawVolume;
 				break;
 			case GLFW_KEY_R:
 				// reset the camera view 

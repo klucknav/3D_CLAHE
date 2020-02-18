@@ -1,0 +1,153 @@
+#version 430
+layout(local_size_x = 4, local_size_y = 4, local_size_z = 4) in;	// 64 threads
+
+// input Dicom volume
+layout(r16, binding = 0) uniform image3D volume;
+
+// computed mapped histogram
+layout(rg16, binding = 0) uniform image1D outHist;	
+
+uniform vec3 subBlockDims;
+
+void makeHistogram3D(unsigned int* volume, unsigned int startX, unsigned int startY, unsigned int startZ,
+	unsigned int endX, unsigned int endY, unsigned int endZ, unsigned int* hist, unsigned int* LUT) {
+
+	// cycle over the subBlock of the volume 
+	for (unsigned int currZ = startZ; currZ < endZ; currZ++) {
+		//cerr << "Z = " << currZ << endl;
+
+		for (unsigned int currY = startY; currY < endY; currY++) {
+
+			for (unsigned int currX = startX; currX < endX; currX++) {
+
+				unsigned int index = currZ * _imgDimX * _imgDimY + currY * _imgDimX + currX;
+				//cerr << index << " : ";
+				hist[LUT[volume[currZ * _imgDimX * _imgDimY + currY * _imgDimX + currX]]]++;
+			}
+			//cerr << endl;
+		}
+	}
+}
+
+void clipHistogram(float clipLimit, unsigned int numBins, unsigned int* localHist) {
+	
+	// calculate the clipValue based on the max of the localHist:
+	float max = 0.0f;
+	unsigned int* binPointer1 = localHist;
+	for (unsigned int i = 0; i < numBins; i++) {
+		float value = (float)binPointer1[i];
+		if (value > max) {
+			max = value;
+		}
+	}
+	float clipValue = (float)clipLimit * max;
+	//printf("max: %f, clipValue: %f\n", max, clipValue);
+
+	// calculate the total number of excess pixels
+	unsigned long excess = 0.0;			
+	unsigned int * binPointer = localHist;
+	for (unsigned int i = 0; i < numBins; i++) {
+		long binExcess = (long)binPointer[i] - (long)clipValue;
+		if (binExcess > 0.0) {
+			excess += binExcess;
+		}
+	}
+	//cerr << "1. number of excess: " << excess << endl;
+
+	// Clip histogram and redistribute excess pixels in each bin 
+	unsigned long avgInc = excess / numBins;
+	unsigned long upper = clipValue - avgInc;	// Bins larger than upper set to clipValue
+	for (unsigned int i = 0; i < numBins; i++) {
+		// clip the bin
+		if (localHist[i] > clipValue) {
+			localHist[i] = clipValue;
+		}
+		else {
+			// if the value is too large remove from the bin into excess 
+			if (localHist[i] > upper) {
+				excess -= localHist[i] - upper; 
+				localHist[i] = clipValue;
+			}
+			// otherwise put the excess into the bin
+			else {
+				excess -= avgInc; 
+				localHist[i] += avgInc;
+			}
+		}
+	}
+	//cerr << "2. number of excess: " << excess << endl;
+
+	// Redistribute the remaining excess pixels
+	while (excess) { 
+		unsigned int* endPointer = &localHist[numBins];
+		unsigned int* histPointer = localHist;
+		while (excess && histPointer < endPointer) {
+
+			unsigned long stepSize = numBins / excess;
+			// make sure the stepsize is at least 1
+			if (stepSize < 1) {
+				stepSize = 1;
+			}
+
+			// add excess to the hist 
+			for (binPointer = localHist; binPointer < endPointer && excess; binPointer += stepSize) {
+				if (*binPointer < clipValue) {
+					(*binPointer)++;
+					excess--;
+				}
+			}
+			//cerr << "3. number of excess: " << excess << endl;
+			// restart redistributing on other bin location
+			histPointer++;
+		}
+	}
+
+}
+
+
+void mapHistogram(unsigned int* localHist, unsigned int numBins, unsigned long numPixelsCR) {
+
+	unsigned long sum = 0;
+	const float scale = ((float)(_maxVal - _minVal)) / numPixelsCR;
+
+	// for each bin
+	for (unsigned int i = 0; i < numBins; i++) {
+
+		// add the histogram value for this contextual region to the sum 
+		sum += localHist[i]; 
+
+		// to normalize the cdf
+		localHist[i] = (unsigned int)(min(_minVal + sum * scale, (float)_maxVal));
+	}
+}
+
+
+
+void main(){
+
+	uvec2 pixelIndex = gl_GlobalInvocationID.xyz;
+	ivec3 volumeDims = imageSize(volume);
+
+	ivec3 chunkIndex = pixelIndex / subBlockDims;
+	
+
+	float imgSample = imageLoad(volume, pixelIndex).r;
+
+	//	atomicAdd(outHist[LUT[index]], 1);
+
+	makeHistogram3D(_imageData, mappedHist, LUT);
+	
+
+	// clip the histogram
+	clipHistogram(clipLimit, numBins, currHist);
+
+	// calculate the cumulative histogram and re-map to [min, max]
+	mapHistogram(currHist, numBins, numPixelsSB);
+	
+
+
+
+
+	imageStore(mappedHist, index, imgSample);
+
+}
