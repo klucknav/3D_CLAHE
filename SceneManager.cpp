@@ -110,13 +110,23 @@ void SceneManager::InitScene() {
 	float clipLimit = 0.85f;
 
 	CLAHE * _test = new CLAHE(_dicomImage);
-	GLuint result = _test->CLAHE_2D(numCRx, numCRy, numGrayValsFinal, clipLimit);
+
+	// Regular CLAHE
+	//GLuint result = _test->CLAHE_2D(numCRx, numCRy, numGrayValsFinal, clipLimit);
+
+	// Focused CLAHE
+	unsigned int xMin = 200;
+	unsigned int xMax = 400;
+	unsigned int yMin = 200;
+	unsigned int yMax = 400;
+	GLuint result = _test->Focused_CLAHE_2D(xMin, yMin, xMax, yMax, numGrayValsFinal);
+
 	if (result > 0) {
 		_newDicomTexture = result;
 	}
 
 	// 3D CLAHE - Cube Volume 
-	_dicomCube = new Cube();
+	/*_dicomCube = new Cube();
 	std::string folderPath = std::string("C:/Users/kroth/Documents/UCSD/Grad/Thesis/clahe_2/Larry");
 	ImageLoader* _dicomVolume = new ImageLoader(folderPath, false);
 	_dicomVolumeTexture = _dicomVolume->GetTextureID();
@@ -131,7 +141,7 @@ void SceneManager::InitScene() {
 	if (result > 0) {
 		_newDicomVolumeTexture = result;
 	}
-	cerr << "result: " << result << endl;
+	cerr << "result: " << result << endl;*/
 
 	////////////////////////////////////////////////////////////////////////////
 	// Fake Data for Testing

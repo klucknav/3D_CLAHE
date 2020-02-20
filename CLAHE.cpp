@@ -67,7 +67,7 @@ CLAHE::CLAHE(ImageLoader* img) {
 
 	// GrayValue Properties
 	uint16_t max = 0;
-	uint16_t min = NUM_IN_GRAY_VALS;
+	uint16_t min = (uint16_t)NUM_IN_GRAY_VALS;
 	for (unsigned int i = 0; i < _imgDimX * _imgDimY * _imgDimZ; i++) {
 		uint16_t val = _imageData[i];
 		if (val > max) {
@@ -98,7 +98,7 @@ CLAHE::CLAHE(uint16_t* img, glm::vec3 imgDims, unsigned int minV, unsigned int m
 	_maxVal = maxV;
 
 	uint16_t max = 0;
-	uint16_t min = NUM_IN_GRAY_VALS;
+	uint16_t min = (uint16_t)NUM_IN_GRAY_VALS;
 	for (unsigned int i = 0; i < _imgDimX * _imgDimY * _imgDimZ; i++) {
 		uint16_t val = _imageData[i];
 		if (val > max) {
@@ -157,14 +157,14 @@ void CLAHE::makeLUT(uint16_t* LUT, unsigned int numBins) {
 // numBins	 - number of gray values
 // LUT		 - mapping from image's gray values to the desired gray value range
 void CLAHE::makeHistogram2D(uint16_t* image, unsigned int* localHist, uint16_t* LUT,
-	unsigned int startX, unsigned int startY, unsigned int endX, unsigned int endY) {
+	unsigned int startX, unsigned int startY, unsigned int endX, unsigned int endY, unsigned int xDim) {
 
 	// cycle through the section of the image 
 	for (unsigned int currY = startY; currY < endY; currY++) {
 		for (unsigned int currX = startX; currX < endX; currX++) {
 
 			// increment the localHist for the image grayvalue 
-			localHist[LUT[image[currY * _imgDimX + currX]]]++;
+			localHist[LUT[image[currY * xDim + currX]]]++;
 		}
 	}
 }
@@ -211,7 +211,7 @@ void CLAHE::clipHistogram(float clipLimit, unsigned int numBins, unsigned int* l
 	//printf("max: %f, clipValue: %f\n", max, clipValue);
 
 	// calculate the total number of excess pixels
-	unsigned long excess = 0.0;			
+	unsigned long excess = 0;
 	hist = localHist;
 	for (unsigned int i = 0; i < numBins; i++) {
 		float toRemove = (float)hist[i] - clipValue;
@@ -222,18 +222,18 @@ void CLAHE::clipHistogram(float clipLimit, unsigned int numBins, unsigned int* l
 	//cerr << "1. number of excess: " << excess << endl;
 
 	// Clip histogram and redistribute excess pixels in each bin 
-	unsigned long avgInc = (float) excess / (float) numBins;
+	float avgInc = excess / (float) numBins;
 	float upper = clipValue - avgInc;	// Bins larger than upper set to clipValue
 	for (unsigned int i = 0; i < numBins; i++) {
 		// if the number in the histogram is too big -> clip the bin
 		if (localHist[i] > clipValue) {
-			localHist[i] = clipValue;
+			localHist[i] = (unsigned int)clipValue;
 		}
 		else {
 			// if the value is too large remove from the bin into excess 
 			if (localHist[i] > upper) {
 				excess -= localHist[i] - upper; 
-				localHist[i] = clipValue;
+				localHist[i] = (unsigned int) clipValue;
 			}
 			// otherwise put the excess into the bin
 			else {
@@ -245,12 +245,12 @@ void CLAHE::clipHistogram(float clipLimit, unsigned int numBins, unsigned int* l
 	//cerr << "2. number of excess: " << excess << endl;
 
 	// Redistribute the remaining excess pixels
-	while (excess > 0.0) { 
+	while (excess > 0.0f) { 
 		unsigned int* endPointer = &localHist[numBins];
 		unsigned int* histPointer = localHist;
-		while (excess > 0.0 && histPointer < endPointer) {
+		while (excess > 0.0f && histPointer < endPointer) {
 
-			unsigned long stepSize = numBins / excess;
+			unsigned long stepSize = (unsigned long) (numBins / excess);
 			// make sure the stepsize is at least 1
 			if (stepSize < 1) {
 				stepSize = 1;
@@ -300,10 +300,9 @@ void CLAHE::mapHistogram(unsigned int* localHist, unsigned int numBins, unsigned
 // sizeX, sizeY   - size of subImage we are interpolating over
 // LUT			  - mapping from image's gray values to the desired gray value range
 void CLAHE::lerp2D(uint16_t* image, unsigned int* LU, unsigned int* RU, unsigned int* LB, unsigned int* RB, 
-	unsigned int sizeX, unsigned int sizeY, unsigned int startX, unsigned int startY, uint16_t* LUT, unsigned int numBins) {
+	unsigned int sizeX, unsigned int sizeY, unsigned int startX, unsigned int startY, uint16_t* LUT, unsigned int numBins, unsigned int xDim) {
 	
-	// Normalization factor
-	float normFactor = sizeX * sizeY;
+	float normFactor = (float)(sizeX * sizeY);
 	//normFactor /= ((float)numBins / (float)_maxVal);
 
 	// for each pixel in the subImage
@@ -315,21 +314,15 @@ void CLAHE::lerp2D(uint16_t* image, unsigned int* LU, unsigned int* RU, unsigned
 			unsigned int aInv = sizeX - a;
 			unsigned int currX = startX + a;
 
-			//uint16_t greyValue = LUT[*imgPointer];
-			uint16_t greyValue = LUT[image[currY * _imgDimX + currX]];
+			uint16_t greyValue = LUT[image[currY * xDim + currX]];
 
 			// bilinearly interpolate the mapped histograms (LU, RU, LB, RB)
 			unsigned int p1 = aInv * LU[greyValue] + a * RU[greyValue];
 			unsigned int p2 = aInv * LB[greyValue] + a * RB[greyValue];
 			unsigned int ans = ((bInv * p1 + b * p2) / (unsigned int)normFactor);
 
-			//*imgPointer++ = (uint16_t)ans;
-			image[currY * _imgDimX + currX] = (uint16_t)ans;
-
-			//*imgPointer++ = (uint16_t)((aInv * (bInv * LU[greyValue] + b * RU[greyValue])
-			//							+ a  * (bInv * LB[greyValue] + b * RB[greyValue])) / normFactor);
+			image[currY * xDim + currX] = (uint16_t)ans;
 		}
-		//imgPointer += _imgDimX - sizeX;
 	}
 }
 
@@ -348,7 +341,7 @@ void CLAHE::lerp3D(uint16_t* volume,
 	unsigned int startY, unsigned int startZ, uint16_t* LUT, unsigned int numBins) {
 
 	// Normalization factor
-	float normFactor = sizeX * sizeY * sizeZ;
+	float normFactor = (float)(sizeX * sizeY * sizeZ);
 	//normFactor /= ((float)numBins / (float)_maxVal);
 
 	//printf("-----\n3D lerp\n"); 
@@ -447,7 +440,7 @@ int CLAHE::CLAHE_2D(unsigned int numCRx, unsigned int numCRy, unsigned int numBi
 
 			// calculate the local histogram for the given contextual region
 			currHist = &mappedHist[numBins * (currCRy * numCRx + currCRx)];
-			makeHistogram2D(_imageData, currHist, LUT, startX, startY, endX, endY);
+			makeHistogram2D(_imageData, currHist, LUT, startX, startY, endX, endY, _imgDimX);
 
 			// clip the histogram
 			clipHistogram(clipLimit, numBins, currHist);
@@ -517,7 +510,7 @@ int CLAHE::CLAHE_2D(unsigned int numCRx, unsigned int numCRy, unsigned int numBi
 			//cerr << "R_dn: " << numBins * (yDown * numCRx + xRight) << endl;
 			//cerr << "-----\n";
 
-			lerp2D(_imageData, L_Up, R_Up, L_Dn, R_Dn, subX, subY, startX, startY, LUT, numBins);
+			lerp2D(_imageData, L_Up, R_Up, L_Dn, R_Dn, subX, subY, startX, startY, LUT, numBins, _imgDimX);
 
 			startX = startX + subX;
 		}
@@ -548,6 +541,147 @@ int CLAHE::CLAHE_2D(unsigned int numCRx, unsigned int numCRy, unsigned int numBi
 	}
 	printf("max: %f\n\n", max);
 	return textureID;
+}
+
+
+int CLAHE::Focused_CLAHE_2D(unsigned int xMin, unsigned int yMin, unsigned int xMax, unsigned int yMax, unsigned int numBins) {
+	
+	// 1.	store just the section that you want 
+	//		run CLAHE on that
+	//		put it back in the _imageData
+
+	unsigned int xDim = (xMax - xMin);
+	unsigned int yDim = (yMax - yMin);
+
+	// take out the section you want to enhance
+	uint16_t* subImageData = new uint16_t[ xDim * yDim ];
+	memset(subImageData, 0, sizeof(uint16_t) * xDim * yDim);
+	for (unsigned int xIndex = xMin, x = 0; xIndex < xMax; xIndex++, x++) {
+		for (unsigned int yIndex = yMin, y = 0; yIndex < yMax; yIndex++, y++) {
+			subImageData[y * xDim + x] = _imageData[yIndex * _imgDimX + xIndex];
+		}
+	}
+
+	// Determine the number of CR
+	unsigned int numCRx = max((int)(xDim / 100), 1);
+	unsigned int numCRy = max((int)(yDim / 100), 1);
+
+	// calculate the size of the contextual regions
+	unsigned int sizeCRx = xDim / numCRx;
+	unsigned int sizeCRy = yDim / numCRy;
+	unsigned long numPixelsCR = (unsigned long)sizeCRx * (unsigned long)sizeCRy;
+	
+	printf("\n----- Focused 2D CLAHE -----\n");
+	printf("x range: [%d, %d], y range: [%d, %d]\n", xMin, xMax, yMin, yMax);
+	printf("Num Contextual Regions: %i, %i, Image size: %i, %i\n", numCRx, numCRy, xDim, yDim);
+	printf("Size of Contextual Regions: %d, %d, each with %d pixels\n\n", sizeCRx, sizeCRy, numPixelsCR);
+	printf("Make LUT...Image Range: [%d, %d], numBins: %d\n", _minVal, _maxVal, numBins);
+	float clipLimit = 0.85f;
+
+	// Make the LUT - to scale the input image from NUM_GRAY_VALS to numBins
+	uint16_t* LUT = new uint16_t[NUM_IN_GRAY_VALS];
+	makeLUT(LUT, numBins);
+
+	// pointer to mappings (bins)
+	unsigned int* currHist;
+	unsigned int* mappedHist = new unsigned int[numCRx * numCRy * numBins];
+	memset(mappedHist, 0, sizeof(unsigned int) * numCRx * numCRy * numBins);
+
+	// Calculate greylevel mappings for each contextual region 
+	printf("build local histograms...\n");
+	for (unsigned int currCRy = 0; currCRy < numCRy; currCRy++) {
+		unsigned int startY = currCRy * sizeCRy;
+		unsigned int endY = (currCRy + 1) * sizeCRy;
+
+		for (unsigned int currCRx = 0; currCRx < numCRx; currCRx++) {
+			unsigned int startX = currCRx * sizeCRx;
+			unsigned int endX = (currCRx + 1) * sizeCRx;
+
+			// calculate the local histogram for the given contextual region
+			currHist = &mappedHist[numBins * (currCRy * numCRx + currCRx)];
+			makeHistogram2D(subImageData, currHist, LUT, startX, startY, endX, endY, xDim);
+
+			// clip the histogram
+			clipHistogram(clipLimit, numBins, currHist);
+
+			// calculate the cumulative histogram and re-map to [min, max]
+			mapHistogram(currHist, numBins, numPixelsCR);
+		}
+	}
+
+	// Interpolate greylevel mappings to get CLAHE image 
+	printf("interpolate...\n");
+	unsigned int xRight, xLeft, yUp, yDown, subY, subX;
+	unsigned int* L_Up, * L_Dn, * R_Up, * R_Dn;
+	unsigned int startY = 0;
+	for (unsigned int currCRy = 0; currCRy <= numCRy; currCRy++) {
+
+		// top row
+		if (currCRy == 0) {
+			subY = sizeCRy / 2;
+			yUp = 0;			yDown = 0;
+		}
+		else {
+			// bottom row
+			if (currCRy == numCRy) {
+				subY = (sizeCRy + 1) / 2;
+				yUp = numCRy - 1;			yDown = yUp;
+			}
+			// default values
+			else {
+				subY = sizeCRy;
+				yUp = currCRy - 1;			yDown = currCRy;
+			}
+		}
+
+		unsigned int startX = 0;
+		for (unsigned int currCRx = 0; currCRx <= numCRx; currCRx++) {
+
+			// left column
+			if (currCRx == 0) {
+				subX = sizeCRx / 2;
+				xLeft = 0;			xRight = 0;
+			}
+			else {
+				// special case: right column
+				if (currCRx == numCRx) {
+					subX = (sizeCRx + 1) / 2;
+					xLeft = numCRx - 1;				xRight = xLeft;
+				}
+				// default values
+				else {
+					subX = sizeCRx;
+					xLeft = currCRx - 1;			xRight = currCRx;
+				}
+			}
+
+			L_Up = &mappedHist[numBins * (yUp * numCRx + xLeft)];
+			R_Up = &mappedHist[numBins * (yUp * numCRx + xRight)];
+			L_Dn = &mappedHist[numBins * (yDown * numCRx + xLeft)];
+			R_Dn = &mappedHist[numBins * (yDown * numCRx + xRight)];
+
+			lerp2D(subImageData, L_Up, R_Up, L_Dn, R_Dn, subX, subY, startX, startY, LUT, numBins, xDim);
+
+			startX = startX + subX;
+		}
+		startY = startY + subY;
+	}
+
+	// clean up 
+	delete[] mappedHist;
+	delete[] LUT;
+
+	cerr << "fin\n\n";
+
+	// put the section back into the image
+	for (unsigned int xIndex = xMin, x = 0; xIndex < xMax; xIndex++, x++) {
+		for (unsigned int yIndex = yMin, y = 0; yIndex < yMax; yIndex++, y++) {
+			_imageData[yIndex * _imgDimX + xIndex] = subImageData[y * xDim + x];
+		}
+	}
+
+	// make a texture for the resulting image
+	return initTexture2D(_imgDimX, _imgDimY, GL_R16, GL_RED, GL_UNSIGNED_SHORT, GL_LINEAR, _imageData);
 }
 
 
@@ -748,7 +882,7 @@ int CLAHE::CLAHE_3D(unsigned int numSBx, unsigned int numSBy, unsigned int numSB
 	for (unsigned int i = 0; i < _imgDimX * _imgDimY * _imgDimZ; i++) {
 		float value = vol[i];
 		value = (value / max) * (float)_maxVal;
-		vol[i] = value;
+		vol[i] = (uint16_t)value;
 	}
 
 	// store the new data as a texture 
@@ -762,6 +896,7 @@ int CLAHE::CLAHE_3D(unsigned int numSBx, unsigned int numSBy, unsigned int numSB
 
 	return textureID;
 }
+
 
 ////////////////////////////////////////////////////////////////////////////////
 // Printing Helper Functions
@@ -786,14 +921,14 @@ void CLAHE::printHist(float* hist, unsigned int max) {
 	cerr << "Histogram: \n";
 	unsigned int count = 0;
 	for (unsigned int i = 0; i < max - 1; i++) {
-		printf("(%3d, %d) ", i, hist[i]);
+		printf("(%3d, %f) ", i, hist[i]);
 		if (count == 7) {
 			cerr << endl;
 			count = -1;
 		}
 		count++;
 	}
-	printf("(%3d, %d)\n", max - 1, hist[max - 1]);
+	printf("(%3d, %f)\n", max - 1, hist[max - 1]);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
