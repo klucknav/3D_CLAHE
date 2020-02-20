@@ -52,28 +52,29 @@ private:
 	// Helper Methods
 	void makeLUT(bit_pixel* LUT, unsigned int numBins);
 
-	void makeHistogram2D(bit_pixel* subImage, unsigned int sizeCRx, unsigned int sizeCRy,
-						unsigned int* localHist, unsigned int numBins, uint16_t* LUT);
-	void makeHistogram3D_v2(uint16_t* subVolume, unsigned int sizeSBx, unsigned int sizeSBy,
-						unsigned int sizeSBz, unsigned int* localHist, unsigned int numBins, uint16_t* LUT);
+	// Make the local Histograms 2D and 3D
+	void makeHistogram2D(uint16_t* image, unsigned int* hist, uint16_t* LUT, 
+		unsigned int startX, unsigned int startY, unsigned int endX, unsigned int endY);
 	void makeHistogram3D(uint16_t* volume, unsigned int startX, unsigned int startY, unsigned int startZ,
 		unsigned int endX, unsigned int endY, unsigned int endZ, unsigned int* hist, uint16_t* LUT);
 
+	// Clip and Map the local Histograms (use same for 2D and 3D)
 	void clipHistogram(float clipLimit, unsigned int numBins, unsigned int* localHist);
-	void clipHistogram3D(unsigned int* localHist, unsigned int startX, unsigned int startY, unsigned int startZ,
-		unsigned int endX, unsigned int endY, unsigned int endZ, unsigned int numBins, float clipLimit);
-
 	void mapHistogram(unsigned int* localHist, unsigned int numBins, unsigned long numPixelsCR);
 
-	void lerp2D(uint16_t* image, unsigned int* LU, unsigned int* RU, unsigned int* LD, 
-				unsigned int* RD, unsigned int sizeX, unsigned int sizeY, uint16_t* LUT, unsigned int numBins);
 
-	void lerp3D(uint16_t* volume, unsigned int* LUF, unsigned int* RUF, unsigned int* LDF,
-				unsigned int* RDF, unsigned int* LUB, unsigned int* RUB, unsigned int* LDB,
-				unsigned int* RDB, unsigned int sizeX, unsigned int sizeY, unsigned int sizeZ,
+	// Bilinear and Trilinear Interpolation 
+	void lerp2D(uint16_t* image, unsigned int* LU, unsigned int* RU, unsigned int* LD, unsigned int* RD, 
+				unsigned int sizeX, unsigned int sizeY, unsigned int currCRx, unsigned int currCRy, uint16_t* LUT, unsigned int numBins);
+
+	void lerp3D(uint16_t* volume, unsigned int * LUF, unsigned int * RUF, unsigned int * LDF, unsigned int * RDF, 
+				unsigned int * LUB, unsigned int * RUB, unsigned int * LDB, unsigned int * RDB, 
+				unsigned int sizeX, unsigned int sizeY, unsigned int sizeZ,
 				unsigned int currSBx, unsigned int currSBy, unsigned int currSBz, uint16_t* LUT, unsigned int numBins);
 
+	// Printing Helper Methods 
 	void printHist(unsigned int* hist, unsigned int max);
+	void printHist(float* hist, unsigned int max);
 
 public:
 	CLAHE(ImageLoader* img);

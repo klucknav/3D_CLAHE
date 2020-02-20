@@ -125,42 +125,44 @@ void SceneManager::InitScene() {
 	CLAHE* _volumeTest = new CLAHE(_dicomVolume);
 	//CLAHE* _volumeTest = new CLAHE(_dicomImage);
 
-	unsigned int numCRz = 1;
+	unsigned int numCRz = 4;
+	//unsigned int numCRz = 116;
 	result = _volumeTest->CLAHE_3D(numCRx, numCRy, numCRz, numGrayValsFinal, clipLimit);
 	if (result > 0) {
 		_newDicomVolumeTexture = result;
 	}
+	cerr << "result: " << result << endl;
 
 	////////////////////////////////////////////////////////////////////////////
 	// Fake Data for Testing
-	//int w = 8;
-	//int h = 8;
-	//int d = 1;
-	//glm::vec3 fakeDims = glm::vec3(w, h, d);
-	//int fakeSize = w * h * d;
-	//uint16_t* fakeImage = new uint16_t[fakeSize];
-	////cerr << "fakeImage: \n";
-	//for (unsigned int i = 0; i < fakeSize; i++) {
-	//	fakeImage[i] = i;
-	//	//cerr << "(" << i << ", " << fakeImage[i] << ")\n";
-	//}
-	////cerr << endl << endl;
-	//CLAHE* _imageTest = new CLAHE(fakeImage, fakeDims, 0, fakeSize - 1);
-	//result = _imageTest->CLAHE_2D(2, 2, fakeSize, 0.85);
-	//w = 8;
-	//h = 8;
-	//d = 2;
-	//fakeDims = glm::vec3(w, h, d);
-	//fakeSize = w * h * d;
-	//uint16_t* fakeVol = new uint16_t[fakeSize];
-	////cerr << "fakeImage: \n";
-	//for (unsigned int i = 0; i < fakeSize; i++) {
-	//	fakeVol[i] = i;
-	//	//cerr << "(" << i << ", " << fakeImage[i] << ")\n";
-	//}
-	////cerr << endl << endl;
-	//CLAHE* _volumeTest = new CLAHE(fakeVol, fakeDims, 0, fakeSize-1);
-	//result = _volumeTest->CLAHE_3D(2, 2, 2, fakeSize, 0.85);
+	/*int w = 8;
+	int h = 8;
+	int d = 1;
+	glm::vec3 fakeDims = glm::vec3(w, h, d);
+	int fakeSize = w * h * d;
+	uint16_t* fakeImage = new uint16_t[fakeSize];
+	//cerr << "fakeImage: \n";
+	for (int i = 0; i < fakeSize; i++) {
+		fakeImage[i] = i;
+		//cerr << "(" << i << ", " << fakeImage[i] << ")\n";
+	}
+	//cerr << endl << endl;
+	CLAHE* _imageTest = new CLAHE(fakeImage, fakeDims, 0, fakeSize - 1);
+	GLuint result = _imageTest->CLAHE_2D(2, 2, fakeSize, 0.85f);
+	w = 8;
+	h = 8;
+	d = 4;
+	fakeDims = glm::vec3(w, h, d);
+	fakeSize = w * h * d;
+	uint16_t* fakeVol = new uint16_t[fakeSize];
+	//cerr << "fakeImage: \n";
+	for (int i = 0; i < fakeSize; i++) {
+		fakeVol[i] = i;
+		//cerr << "(" << i << ", " << fakeImage[i] << ")\n";
+	}
+	//cerr << endl << endl;
+	CLAHE* _volumeTest = new CLAHE(fakeVol, fakeDims, 0, fakeSize-1);
+	result = _volumeTest->CLAHE_3D(2, 2, 2, fakeSize, 0.85f);*/
 	////////////////////////////////////////////////////////////////////////////
 
 	_newTexture = false;

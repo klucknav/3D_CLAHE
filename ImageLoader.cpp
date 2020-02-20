@@ -163,10 +163,13 @@ void ReadDicomImage(DicomImage* img, uint16_t* slice, int w, int h) {
 	memcpy(slice, pixelData, sizeof(uint16_t) * w * h);
 }
 
-void ReadDicomImages(uint16_t* data, vector<Slice>& images, int j, int k, int w, int h) {
-	for (int i = j; i < k; i++) {
-		if (i >= (int)images.size()) break;
-		ReadDicomImage(images[i].image, data + i * w * h, w, h);
+void ReadDicomImages(uint16_t* data, vector<Slice>& images, int start, int end, int w, int h) {
+
+	for (int sliceID = start; sliceID < end; sliceID++) {
+		if (sliceID >= (int)images.size()) 
+			break;
+		//printf("slice: %d, adding: %d\n", sliceID, (sliceID * w * h));
+		ReadDicomImage(images[sliceID].image, data + sliceID * w * h, w, h);
 	}
 }
 
@@ -261,18 +264,22 @@ GLuint ImageLoader::loadDicomVolume(const vector<string>& files) {
 		printf("reading %d slices\n", d);
 		vector<thread> threads;
 		int s = ((int)images.size() + THREAD_COUNT - 1) / THREAD_COUNT;
-		for (int i = 0; i < (int)images.size(); i += s)
+
+		// each thread processes s slices 
+		for (int i = 0; i < (int)images.size(); i += s) {
 			threads.push_back(thread(ReadDicomImages, _imageData, images, i, i + s, w, h));
-		for (int i = 0; i < (int)threads.size(); i++)
+		}
+
+		for (int i = 0; i < (int)threads.size(); i++) {
 			threads[i].join();
+		}
 	}
 	else {
 		ReadDicomImages(_imageData, images, 0, (int)images.size(), w, h);
 	}
 
 	GLuint tex = InitTexture3D(w, h, d, GL_R16, GL_RED, GL_UNSIGNED_SHORT, GL_LINEAR, _imageData);
-	//delete[] data;
-	cerr << "Dicom Volume loaded: (" << tex << ")\n\n";
+	printf("Dicom Volume loaded: (%d)\n\n", tex);
 	return tex;
 }
 
