@@ -16,15 +16,25 @@ GLFWwindow* SceneManager::_window;
 
 // Scene Variables
 Camera* SceneManager::_camera;
-ImageLoader* _dicomImage;
-ImageLoader* _dicomVolume;
-GLuint SceneManager::_dicomTexture;
-GLuint _newDicomTexture;
-bool _newTexture;
-GLuint SceneManager::_dicomVolumeTexture;
-GLuint _newDicomVolumeTexture;
-Cube* SceneManager::_dicomCube;
 bool SceneManager::_drawVolume;
+// 2D Image
+ImageLoader* _dicomImage;
+GLuint SceneManager::_dicomTexture;
+GLuint SceneManager::_claheDicomTexture;
+GLuint SceneManager::_focusedDicomTexture;
+// 3D Volume
+ImageLoader* _dicomVolume;
+Cube* SceneManager::_dicomCube;
+GLuint SceneManager::_dicomVolumeTexture;
+GLuint SceneManager::_claheDicomVolumeTexture;
+GLuint SceneManager::_focusedDicomVolumeTexture;
+
+enum class TextureMode {
+	_RAW,
+	_CLAHE,
+	_FOCUSED
+};
+TextureMode _textureMode;
 
 // Shader Variables
 GLuint SceneManager::_volumeShader;
@@ -98,6 +108,7 @@ void SceneManager::InitScene() {
 	_drawVolume = false;
 	glm::vec3 size, imgDims, volDims;
 
+	////////////////////////////////////////////////////////////////////////////
 	// 2D CLAHE - Single Texture
 	glGenVertexArrays(1, &_VAO);
 	std::string path = std::string("C:/Users/kroth/Documents/UCSD/Grad/Thesis/clahe_2/dicom/sample.dcm");
@@ -111,37 +122,33 @@ void SceneManager::InitScene() {
 
 	CLAHE * _test = new CLAHE(_dicomImage);
 
-	// Regular CLAHE
-	//GLuint result = _test->CLAHE_2D(numCRx, numCRy, numGrayValsFinal, clipLimit);
+	// Regular 2D CLAHE
+	_claheDicomTexture = _test->CLAHE_2D(numCRx, numCRy, numGrayValsFinal, clipLimit);
 
-	// Focused CLAHE
+	// Focused 2D CLAHE
 	unsigned int xMin = 200;
 	unsigned int xMax = 400;
 	unsigned int yMin = 200;
 	unsigned int yMax = 400;
-	GLuint result = _test->Focused_CLAHE_2D(xMin, yMin, xMax, yMax, numGrayValsFinal);
+	_focusedDicomTexture = _test->Focused_CLAHE_2D(xMin, yMin, xMax, yMax, numGrayValsFinal, clipLimit);
 
-	if (result > 0) {
-		_newDicomTexture = result;
-	}
-
+	////////////////////////////////////////////////////////////////////////////
 	// 3D CLAHE - Cube Volume 
-	/*_dicomCube = new Cube();
+	_dicomCube = new Cube();
 	std::string folderPath = std::string("C:/Users/kroth/Documents/UCSD/Grad/Thesis/clahe_2/Larry");
 	ImageLoader* _dicomVolume = new ImageLoader(folderPath, false);
 	_dicomVolumeTexture = _dicomVolume->GetTextureID();
 
 	// 3D CLAHE
 	CLAHE* _volumeTest = new CLAHE(_dicomVolume);
-	//CLAHE* _volumeTest = new CLAHE(_dicomImage);
 
 	unsigned int numCRz = 4;
-	//unsigned int numCRz = 116;
-	result = _volumeTest->CLAHE_3D(numCRx, numCRy, numCRz, numGrayValsFinal, clipLimit);
-	if (result > 0) {
-		_newDicomVolumeTexture = result;
-	}
-	cerr << "result: " << result << endl;*/
+	_claheDicomVolumeTexture = _volumeTest->CLAHE_3D(numCRx, numCRy, numCRz, numGrayValsFinal, clipLimit);
+
+	// Focused 3D CLAHE
+	unsigned int zMin = 50;
+	unsigned int zMax = 100;
+	_focusedDicomVolumeTexture = _volumeTest->Focused_CLAHE_3D(xMin, xMax, yMin, yMax, zMin, zMax, numGrayValsFinal, clipLimit);
 
 	////////////////////////////////////////////////////////////////////////////
 	// Fake Data for Testing
@@ -175,7 +182,7 @@ void SceneManager::InitScene() {
 	result = _volumeTest->CLAHE_3D(2, 2, 2, fakeSize, 0.85f);*/
 	////////////////////////////////////////////////////////////////////////////
 
-	_newTexture = false;
+	_textureMode = TextureMode::_RAW;
 }
 
 void SceneManager::ClearScene() {
@@ -213,11 +220,16 @@ void SceneManager::Draw() {
 	if (_drawVolume) {
 		glEnable(GL_BLEND);
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-		if (_newTexture) {
-			_dicomCube->Draw(_volumeShader, _camera->GetViewProjectMtx(), _camera->GetCamPos(), _newDicomVolumeTexture);
-		}
-		else {
-			_dicomCube->Draw(_volumeShader, _camera->GetViewProjectMtx(), _camera->GetCamPos(), _dicomVolumeTexture);
+		switch (_textureMode) {
+			case TextureMode::_RAW:
+				_dicomCube->Draw(_volumeShader, _camera->GetViewProjectMtx(), _camera->GetCamPos(), _dicomVolumeTexture);
+				break;
+			case TextureMode::_CLAHE:
+				_dicomCube->Draw(_volumeShader, _camera->GetViewProjectMtx(), _camera->GetCamPos(), _claheDicomVolumeTexture);
+				break;
+			case TextureMode::_FOCUSED:
+				_dicomCube->Draw(_volumeShader, _camera->GetViewProjectMtx(), _camera->GetCamPos(), _focusedDicomVolumeTexture);
+				break;
 		}
 	}
 
@@ -226,11 +238,16 @@ void SceneManager::Draw() {
 		glUseProgram(_displayShader);
 		glBindVertexArray(_VAO);
 		glActiveTexture(GL_TEXTURE0);
-		if (_newTexture) {
-			glBindTexture(GL_TEXTURE_2D, _newDicomTexture);
-		}
-		else {
-			glBindTexture(GL_TEXTURE_2D, _dicomTexture);
+		switch (_textureMode) {
+			case TextureMode::_RAW:
+				glBindTexture(GL_TEXTURE_2D, _dicomTexture);
+				break;
+			case TextureMode::_CLAHE:
+				glBindTexture(GL_TEXTURE_2D, _claheDicomTexture);
+				break;
+			case TextureMode::_FOCUSED:
+				glBindTexture(GL_TEXTURE_2D, _focusedDicomTexture);
+				break;
 		}
 		glDrawArrays(GL_TRIANGLES, 0, 3);
 	}
@@ -258,9 +275,16 @@ void SceneManager::KeyCallback(GLFWwindow* window, int key, int scancode, int ac
 				// reset the camera view 
 				_camera->Reset();
 				break;
-			case GLFW_KEY_N:
-				_newTexture = !_newTexture;
+			case GLFW_KEY_D:
+				_textureMode = TextureMode::_RAW;
 				break;
+			case GLFW_KEY_C:
+				_textureMode = TextureMode::_CLAHE;
+				break;
+			case GLFW_KEY_F:
+				_textureMode = TextureMode::_FOCUSED;
+				break;
+
 		}
 	}
 }

@@ -30,6 +30,11 @@ private:
 	uint16_t _minVal, _maxVal;
 
 
+	// Main CLAHE function
+	void clahe2D(uint16_t* image, unsigned int imageDimX, unsigned int imageDimY, unsigned int numCRx, unsigned int numCRy, unsigned int numBins, float clipLimit);
+	void clahe3D(uint16_t* volume, unsigned int imageDimX, unsigned int imageDimY, unsigned int imageDimZ, 
+				unsigned int numSBx, unsigned int numSBy, unsigned int numSBz, unsigned int numBins, float clipLimit);
+
 	// CLAHE Helper Methods
 	void makeLUT(uint16_t* LUT, unsigned int numBins);
 
@@ -37,7 +42,7 @@ private:
 	void makeHistogram2D(uint16_t* image, unsigned int* hist, uint16_t* LUT, 
 		unsigned int startX, unsigned int startY, unsigned int endX, unsigned int endY, unsigned int xDim);
 	void makeHistogram3D(uint16_t* volume, unsigned int startX, unsigned int startY, unsigned int startZ,
-		unsigned int endX, unsigned int endY, unsigned int endZ, unsigned int* hist, uint16_t* LUT);
+		unsigned int endX, unsigned int endY, unsigned int endZ, unsigned int* hist, uint16_t* LUT, unsigned int xDim, unsigned int yDim);
 
 	// Clip and Map the local Histograms (use same for 2D and 3D)
 	void clipHistogram(float clipLimit, unsigned int numBins, unsigned int* localHist);
@@ -49,12 +54,13 @@ private:
 
 	void lerp3D(uint16_t* volume, unsigned int * LUF, unsigned int * RUF, unsigned int * LDF, unsigned int * RDF, 
 				unsigned int * LUB, unsigned int * RUB, unsigned int * LDB, unsigned int * RDB, 
-				unsigned int sizeX, unsigned int sizeY, unsigned int sizeZ,
-				unsigned int currSBx, unsigned int currSBy, unsigned int currSBz, uint16_t* LUT, unsigned int numBins);
+				unsigned int sizeX, unsigned int sizeY, unsigned int sizeZ, unsigned int currSBx, unsigned int currSBy, unsigned int currSBz, 
+				uint16_t* LUT, unsigned int numBins, unsigned int xDim, unsigned int yDim);
 
 	// Printing Helper Methods 
 	void printHist(unsigned int* hist, unsigned int max);
-	void printHist(float* hist, unsigned int max);
+	void maxHistVal(unsigned int* hist, unsigned int max);
+	void countHist(unsigned int* hist, unsigned int max);
 
 public:
 	CLAHE(ImageLoader* img);
@@ -64,6 +70,8 @@ public:
 	int CLAHE_2D(unsigned int numCRx, unsigned int numCRy, unsigned int numBins, float clipLimit);
 	int CLAHE_3D(unsigned int numCRx, unsigned int numCRy, unsigned int numCRz, unsigned int numBins, float clipLimit);
 
-	int Focused_CLAHE_2D(unsigned int minX, unsigned int minY, unsigned int maxX, unsigned int maxY, unsigned int numBins);
+	int Focused_CLAHE_2D(unsigned int minX, unsigned int minY, unsigned int maxX, unsigned int maxY, unsigned int numBins, float clipLimit);
+	int Focused_CLAHE_3D(unsigned int minX, unsigned int maxX, unsigned int minY, unsigned int maxY, unsigned int minZ, unsigned int maxZ, 
+						unsigned int numBins, float clipLimit);
 
 };

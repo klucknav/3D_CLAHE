@@ -18,10 +18,16 @@ private:
 
 	// Scene Variables 
 	static Camera* _camera;
-	static GLuint _dicomTexture;
-	static GLuint _dicomVolumeTexture;
-	static Cube* _dicomCube;
 	static bool _drawVolume;
+	// 2D Image
+	static GLuint _dicomTexture;
+	static GLuint _claheDicomTexture;
+	static GLuint _focusedDicomTexture;
+	// 3D Volume
+	static Cube* _dicomCube;
+	static GLuint _dicomVolumeTexture;
+	static GLuint _claheDicomVolumeTexture;
+	static GLuint _focusedDicomVolumeTexture;
 
 	// Shader Variables
 	static GLuint _displayShader;
