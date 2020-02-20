@@ -12,45 +12,26 @@
 
 using namespace std;
 
-
-// 8 bit-per-pixel images
-//#ifdef BYTE_IMAGE
-//typedef uint16_t bit_pixel;
-//#define NUM_GRAY_VALS (256)
-
-//#else
-// 12 bit-per-pixel images
-typedef uint16_t bit_pixel;
-//# define NUM_GRAY_VALS (4096)
-# define NUM_IN_GRAY_VALS (65536)
-//#endif
-
 class ImageLoader;
 
+# define NUM_IN_GRAY_VALS (65536)
+
 class CLAHE {
+
 private:
 	// for error checking 
 	const unsigned int _maxNumCR_X = 16;
 	const unsigned int _maxNumCR_Y = 16;
 	const unsigned int _maxNumCR_Z = 16;
 
-	// Image Properties 
-	//ImageLoader* _loadedImage;
+	// Image/Volume Properties 
 	uint16_t* _imageData;
 	unsigned int _imgDimX, _imgDimY, _imgDimZ;
-
-	// Grayvalue Properties 
-	unsigned int _minVal, _maxVal, _numBins;
-
-	// Contextual Region Properties 
-	unsigned int _numCRx, _numCRy;
-
-	// Contrast Limited Value
-	float _clipLimit;
+	uint16_t _minVal, _maxVal;
 
 
-	// Helper Methods
-	void makeLUT(bit_pixel* LUT, unsigned int numBins);
+	// CLAHE Helper Methods
+	void makeLUT(uint16_t* LUT, unsigned int numBins);
 
 	// Make the local Histograms 2D and 3D
 	void makeHistogram2D(uint16_t* image, unsigned int* hist, uint16_t* LUT, 
@@ -61,7 +42,6 @@ private:
 	// Clip and Map the local Histograms (use same for 2D and 3D)
 	void clipHistogram(float clipLimit, unsigned int numBins, unsigned int* localHist);
 	void mapHistogram(unsigned int* localHist, unsigned int numBins, unsigned long numPixelsCR);
-
 
 	// Bilinear and Trilinear Interpolation 
 	void lerp2D(uint16_t* image, unsigned int* LU, unsigned int* RU, unsigned int* LD, unsigned int* RD, 

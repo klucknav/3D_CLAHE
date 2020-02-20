@@ -66,35 +66,23 @@ CLAHE::CLAHE(ImageLoader* img) {
 	_imgDimZ = (unsigned int)dims.z;
 
 	// GrayValue Properties
-	_minVal = (unsigned int)img->GetMinPixelValue();
-	_maxVal = (unsigned int)img->GetMaxPixelValue();
-	_numBins = NUM_IN_GRAY_VALS;
-
-	// Contextual Region Properties
-	_numCRx = _numCRy = 4;
-	_clipLimit = 0.85f * 0.75f;
-
 	uint16_t max = 0;
 	uint16_t min = NUM_IN_GRAY_VALS;
-	for (uint16_t x = 0; x < _imgDimX; x++) {
-		for (uint16_t y = 0; y < _imgDimY; y++) {
-			for (uint16_t z = 0; z < _imgDimZ; z++) {
-				uint16_t val = _imageData[z * _imgDimY * _imgDimX + y * _imgDimX + x];
-				if (val > max) {
-					max = val;
-				}
-				else if (val < min) {
-					min = val;
-				}
-			}
+	for (unsigned int i = 0; i < _imgDimX * _imgDimY * _imgDimZ; i++) {
+		uint16_t val = _imageData[i];
+		if (val > max) {
+			max = val;
+		}
+		else if (val < min) {
+			min = val;
 		}
 	}
+	_minVal = min;
+	_maxVal = max;
 
 	printf("CLAHE: \n");
 	printf("imageDims: %d, %d, %d\n", _imgDimX, _imgDimY, _imgDimZ);
-	printf("max = %d, min = %d\n", max, min);
-	_minVal = min;
-	_maxVal = max;
+	printf("min = %d, max = %d\n", _minVal, _maxVal);
 }
 
 CLAHE::CLAHE(uint16_t* img, glm::vec3 imgDims, unsigned int minV, unsigned int maxV) {
@@ -108,32 +96,22 @@ CLAHE::CLAHE(uint16_t* img, glm::vec3 imgDims, unsigned int minV, unsigned int m
 	// GrayValue Properties
 	_minVal = minV;
 	_maxVal = maxV;
-	_numBins = maxV;
-	//_numBins = NUM_IN_GRAY_VALS;
-
-	// Contextual Region Properties
-	_numCRx = _numCRy = 4;
-	_clipLimit = 0.85f;
 
 	uint16_t max = 0;
 	uint16_t min = NUM_IN_GRAY_VALS;
-	for (uint16_t x = 0; x < _imgDimX; x++) {
-		for (uint16_t y = 0; y < _imgDimY; y++) {
-			for (uint16_t z = 0; z < _imgDimZ; z++) {
-				uint16_t val = _imageData[z * _imgDimY * _imgDimX + y * _imgDimX + x];
-				if (val > max) {
-					max = val;
-				}
-				else if (val < min) {
-					min = val;
-				}
-			}
+	for (unsigned int i = 0; i < _imgDimX * _imgDimY * _imgDimZ; i++) {
+		uint16_t val = _imageData[i];
+		if (val > max) {
+			max = val;
+		}
+		else if (val < min) {
+			min = val;
 		}
 	}
 
 	printf("CLAHE: \n");
 	printf("imageDims: %d, %d, %d\n", _imgDimX, _imgDimY, _imgDimZ);
-	printf("max = %d, min = %d\n", max, min);
+	printf("min = %d, max = %d\n", min, max);
 }
 
 CLAHE::~CLAHE() {
@@ -153,7 +131,7 @@ CLAHE::~CLAHE() {
 // minVal	- min gray value from teh DICOM image
 // maxVal	- max gray value from teh DICOM image
 // numBins	- number of gray values we can use
-void CLAHE::makeLUT(bit_pixel* LUT, unsigned int numBins) {
+void CLAHE::makeLUT(uint16_t* LUT, unsigned int numBins) {
 
 	// calculate the size of the bins
 	const uint16_t binSize = (uint16_t)(1 + ((_maxVal - _minVal) / numBins));
