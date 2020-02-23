@@ -1,4 +1,4 @@
-////////////////////////////////////////
+﻿////////////////////////////////////////
 // SceneManager.h
 ////////////////////////////////////////
 
@@ -103,8 +103,8 @@ void SceneManager::InitScene() {
 	// load the shaders
 	_volumeShader = LoadShaders("volume.vert", "volume.frag");
 	_displayShader = LoadShaders("display.vert", "display.frag");
-	
-	// initialize Scene 
+	GLuint _LUTshader = LoadComputeShader("LUT.comp");
+
 	_drawVolume = false;
 	glm::vec3 size, imgDims, volDims;
 
@@ -120,7 +120,7 @@ void SceneManager::InitScene() {
 	unsigned int numGrayValsFinal = 65536;
 	float clipLimit = 0.85f;
 
-	CLAHE * _test = new CLAHE(_dicomImage);
+	/*CLAHE * _test = new CLAHE(_dicomImage);
 
 	// Regular 2D CLAHE
 	_claheDicomTexture = _test->CLAHE_2D(numCRx, numCRy, numGrayValsFinal, clipLimit);
@@ -130,17 +130,20 @@ void SceneManager::InitScene() {
 	unsigned int xMax = 400;
 	unsigned int yMin = 200;
 	unsigned int yMax = 400;
-	_focusedDicomTexture = _test->Focused_CLAHE_2D(xMin, yMin, xMax, yMax, numGrayValsFinal, clipLimit);
+	_focusedDicomTexture = _test->Focused_CLAHE_2D(xMin, yMin, xMax, yMax, numGrayValsFinal, clipLimit);*/
 
 	////////////////////////////////////////////////////////////////////////////
 	// 3D CLAHE - Cube Volume 
 	_dicomCube = new Cube();
 	std::string folderPath = std::string("C:/Users/kroth/Documents/UCSD/Grad/Thesis/clahe_2/Larry");
 	ImageLoader* _dicomVolume = new ImageLoader(folderPath, false);
+	glm::vec3 volDim = _dicomVolume->GetImageDimensions();
+	printf("Volume Dimensions:  ");
+	printVec(volDim);
 	_dicomVolumeTexture = _dicomVolume->GetTextureID();
 
 	// 3D CLAHE
-	CLAHE* _volumeTest = new CLAHE(_dicomVolume);
+	/*CLAHE* _volumeTest = new CLAHE(_dicomVolume);
 
 	unsigned int numCRz = 4;
 	_claheDicomVolumeTexture = _volumeTest->CLAHE_3D(numCRx, numCRy, numCRz, numGrayValsFinal, clipLimit);
@@ -148,7 +151,49 @@ void SceneManager::InitScene() {
 	// Focused 3D CLAHE
 	unsigned int zMin = 50;
 	unsigned int zMax = 100;
-	_focusedDicomVolumeTexture = _volumeTest->Focused_CLAHE_3D(xMin, xMax, yMin, yMax, zMin, zMax, numGrayValsFinal, clipLimit);
+	_focusedDicomVolumeTexture = _volumeTest->Focused_CLAHE_3D(xMin, xMax, yMin, yMax, zMin, zMax, numGrayValsFinal, clipLimit);*/
+
+	////////////////////////////////////////////////////////////////////////////
+	// Using Compute Shaders
+
+	GLuint layer = 1;
+	// buffer to help calculate the max/min
+	GLuint tempBuffer;
+	glGenTextures(1, &tempBuffer);
+	glBindTexture(GL_TEXTURE_3D, tempBuffer);
+	glTexStorage3D(GL_TEXTURE_3D, layer, GL_RG16, volDim.x, volDim.y, volDim.z);
+
+	// buffer to store the LUT
+	GLuint _LUTbuffer;
+	glGenBuffers(1, &_LUTbuffer);
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, _LUTbuffer);
+	glBufferData(GL_SHADER_STORAGE_BUFFER, numGrayValsFinal * sizeof(uint16_t), nullptr, GL_STREAM_READ);
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+
+	// Set up Shader 
+	glUseProgram(_LUTshader);
+	// bind the buffers/textures
+	glBindImageTexture(0, _dicomVolumeTexture, 0, GL_TRUE, layer, GL_READ_ONLY, GL_R16);
+	glBindImageTexture(1, tempBuffer, 0, GL_TRUE, layer, GL_READ_WRITE, GL_RG16);
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, _LUTbuffer);
+
+	GLuint testX = (GLuint)(volDim.x + 3) / 4;
+	GLuint testY = (GLuint)(volDim.y + 3) / 4;
+	GLuint testZ = (GLuint)(volDim.z + 3) / 4;
+	printf("Compute dimensions: ");
+	printVec(glm::vec3(testX, testY, testZ));
+
+	glDispatchCompute(	(GLuint)((volDim.x + 3) / 4), 
+						(GLuint)((volDim.y + 3) / 4),
+						(GLuint)((volDim.z + 3) / 4) );
+	//glDispatchCompute(	(GLuint)(volDim.x), 
+	//					(GLuint)(volDim.y),
+	//					(GLuint)(volDim.z) );
+
+	// make sure writting to the image is finished before reading 
+	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
+	glUseProgram(0);
+
 
 	////////////////////////////////////////////////////////////////////////////
 	// Fake Data for Testing
@@ -345,10 +390,8 @@ void SceneManager::printMat(glm::mat4 toPrint) {
 }
 
 void SceneManager::printVec(glm::vec3 toPrint) {
-	for (int i = 0; i < 3; i++) {
-		std::cerr << toPrint[i] << " : ";
-	}
-	std::cerr << std::endl;
+
+	printf("(%f, %f, %f)\n", toPrint.x, toPrint.y, toPrint.z);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
