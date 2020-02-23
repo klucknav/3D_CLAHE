@@ -1,106 +1,38 @@
-////////////////////////////////////////
-// LUT.comp
-// computes the LUT for CLAHE
-////////////////////////////////////////
-
 #version 430
-
 layout(local_size_x = 4, local_size_y = 4, local_size_z = 4) in;	// 64 threads
-//layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 
 // input Dicom volume
 layout(r16, binding = 0) uniform image3D volume;
 
-// to calculate the min/max value
-layout(rg16, binding = 1) uniform image3D tempBuffer;
-
 // output LUT texture
-layout(std430, binding = 2) buffer shader_data
-{
-    uint LUT[];
-} test;
+layout(r16, binding = 1) uniform image1D LUT;
+layout(rg16, binding = 2) uniform image2D tempBuffer;
 
-float NUM_BINS = 65535.0;
 
+
+// compute the LUT
 void main() {
 
-	ivec3 imageDims = imageSize(volume);
-	int maxImageDim = max(max(imageDims.x, imageDims.y), imageDims.z);
-//	int maxImageDim = imageDims.x * imageDims.y * imageDims.z;
+	shared float sharedMin = 0;
+	shared float sharedMax = 0;
 
-	// copy the volume into the temp buffer 
 	uvec3 index = gl_GlobalInvocationID.xyz;
-	float x = imageLoad(volume, ivec3(index)).x;
-	imageStore(tempBuffer, ivec3(index), vec4(x, x, 0.0, 0.0));
-	memoryBarrierImage();
-	
-	int stride = 1;
-	// TESTING
-//	stride *= 2;
-//
-//	ivec3 currIndex = ivec3(stride*index);
-//	ivec3 nextIndex = ivec3(stride*index) + ivec3(stride/2);
-//
-//	vec2 v1 = imageLoad(tempBuffer, currIndex).xy;
-//	vec2 v2 = imageLoad(tempBuffer, nextIndex).xy;
-////	vec2 v1 = imageLoad(tempBuffer, ivec3(stride*index)).xy;
-////	vec2 v2 = imageLoad(tempBuffer, ivec3(stride*index + uvec3(stride/2))).xy;
-//	
-//	float minVal = min(v1.x, v2.x);
-//	float maxVal = max(v1.y, v2.y);
-//	
-//	vec4 color = vec4(minVal, float(1.0/stride), 0.0, 0.0);
-//
-////	imageStore(tempBuffer, ivec3(stride*index), vec4(minVal, maxVal, 0.0, 0.0));
-//	imageStore(tempBuffer, currIndex, color);
-//	memoryBarrierImage();
+	float imgValue = imageLoad(volume, index);
 
-	// NOTE: for some reason when took the first step out of the while loop and 
-	// removed the memory barriar image call it looked like it was doing the max/min thing
-	// but as soon as add the while loop it looks like it doesn't get past the copy.
+	// calculate the min/max within Group
+	sharedMin = min(sharedMin, imgValue);
+	sharedMax = max(sharedMax, imgValue);
+	memoryBarrierShared();
 
-	while (true) {
-//	for (int i = 0; i < 10; i++) {
-		stride *= 2;
-
-		int offset = stride/2;
-		vec2 v1 = imageLoad(tempBuffer, ivec3(stride*index) + ivec3(  0,      0,    0)).xy;
-		vec2 v2 = imageLoad(tempBuffer, ivec3(stride*index) + ivec3(offset,   0,    0)).xy;
-		vec2 v3 = imageLoad(tempBuffer, ivec3(stride*index) + ivec3(  0,    offset, 0)).xy;
-		vec2 v4 = imageLoad(tempBuffer, ivec3(stride*index) + ivec3(offset, offset, 0)).xy;
-
-		vec2 v5 = imageLoad(tempBuffer, ivec3(stride*index) + ivec3(  0,      0,    offset)).xy;
-		vec2 v6 = imageLoad(tempBuffer, ivec3(stride*index) + ivec3(offset,   0,    offset)).xy;
-		vec2 v7 = imageLoad(tempBuffer, ivec3(stride*index) + ivec3(  0,    offset, offset)).xy;
-		vec2 v8 = imageLoad(tempBuffer, ivec3(stride*index) + ivec3(offset, offset, offset)).xy;
-
-		float minVal = min(min(min(min(min(min(min(v1.x, v2.x), v3.x), v4.x), v5.x), v6.x), v7.x), v8.x);
-		float maxVal = max(max(max(max(max(max(max(v1.y, v2.y), v3.y), v4.y), v5.y), v6.y), v7.y), v8.y);
-		
-//		imageStore(tempBuffer, ivec3(stride*index), vec4(maxVal, float(1.0/stride), 0.0, 0.0));
-//		imageStore(tempBuffer, ivec3(stride*index), vec4(1.0, 1.0, 0.0, 0.0));
-		imageStore(tempBuffer, ivec3(stride*index), vec4(1.0, maxVal, 0.0, 0.0));
-//		imageStore(tempBuffer, ivec3(stride*index), vec4(minVal, maxVal, i, stride));
-		memoryBarrierImage();
-
-		// break when we have finished processing the volume 
-		if (stride > maxImageDim) {
-			imageStore(tempBuffer, ivec3(stride*index), vec4(1.0, maxVal, 0.0, 0.0));
-			break;
-		}
+	// write the group min/max to tempBuffer
+	if (gl_LocalInvocationID == ivec3(0)){
+		imageStore(tempBuffer, gl_WorkGroupID, vec2(sharedMin, sharedMax));
 	}
-//	
-//	// have the one thread compute the LUT
-//	if (index == uvec3(0)) {
-//		ivec2 globalMinMax = ivec2(imageLoad(tempBuffer, ivec3(0,0,0)).xy * NUM_BINS);
-//	
-//		// calculate the size of the bins
-//		float binSize = 1.0 + (globalMinMax.y - globalMinMax.x) / NUM_BINS;
-//
-//		// build up the LUT
-//		for (int i = globalMinMax.x; i <= globalMinMax.y; i++) {
-//			// LUT = (i - min) / binSize
-//			test.LUT[i] = uint((i - globalMinMax.x) / binSize);
-//		}
-//	}
+	memoryBarrierImage();
+
+	// calculate complete min/mx
+	if (index == vec3(0)) {
+		
+	}
+
 }
