@@ -1,0 +1,53 @@
+////////////////////////////////////////
+// LUT.comp
+// computes the min/max and LUT for CLAHE
+////////////////////////////////////////
+
+#version 430
+
+layout(local_size_x = 4, local_size_y = 4, local_size_z = 4) in;	// 64 threads
+
+// input Dicom volume
+layout(r16, binding = 0) uniform image3D volume;
+
+// to calculate the min/max value
+layout(std430, binding = 1) buffer tempBuffer {
+	uint[2] minMaxData;
+};
+
+// output LUT texture
+layout(std430, binding = 2) buffer lutBuffer {
+    uint LUT[];
+};
+
+float NUM_BINS = 65535.0;
+float NUM_OUT_BINS = 256.0;
+
+void main() {
+
+	// calculate the max and min for the volume 
+	uvec3 index = gl_GlobalInvocationID.xyz;
+	float x = imageLoad(volume, ivec3(index)).x;
+	uint val = uint(x * NUM_BINS);
+
+	atomicMin(minMaxData[0], val);
+	atomicMax(minMaxData[1], val);
+
+
+	// Have the one thread compute the LUT
+	if (index == uvec3(0)) {
+		uint globalMin = minMaxData[0];
+		uint globalMax = minMaxData[1];
+	
+		// calculate the size of the bins
+		uint binSize = 1 + uint((globalMax - globalMin) / NUM_OUT_BINS);
+		LUT[0] = globalMax;
+		LUT[1] = binSize;
+
+		// build up the LUT
+//		for (uint i = globalMin; i <=  minMaxData[1]; i++) {
+//			// LUT = (i - min) / binSize
+//			LUT[i] = ( i - globalMin ) / binSize;
+//		}
+	}
+}

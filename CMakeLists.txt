@@ -12,7 +12,7 @@ set(CMAKE_CXX_STANDARD 11)
 add_compile_definitions(clahe SHADER_DIR="C:/Users/kroth/Documents/UCSD/Grad/Thesis/clahe_2/shaders/")
 
 add_executable(clahe "core.h" "main.cpp" "SceneManager.cpp" "Shader.cpp"
-	"ImageLoader.cpp" "Cube.cpp" "Camera.cpp" "CLAHE.cpp")
+	"ImageLoader.cpp" "Cube.cpp" "Camera.cpp" "CLAHE.cpp" "CLAHEshader.cpp")
 
 target_include_directories(clahe PUBLIC 
 	"${GLFW_HOME}/include" 
