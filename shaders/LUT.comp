@@ -33,7 +33,7 @@ void main() {
 
 	// build up the LUT
 	if (index >= globalMin || index <= globalMax) {
-		// LUT = (i - min) / binSize
+		// LUT     =       (i - min)       / binSize
 		LUT[index] = ( index - globalMin ) / binSize;
 	}
 }

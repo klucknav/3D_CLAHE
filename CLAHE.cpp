@@ -199,27 +199,33 @@ void CLAHE::makeHistogram3D(uint16_t* volume, unsigned int startX, unsigned int 
 void CLAHE::clipHistogram(float clipLimit, unsigned int numBins, unsigned int* localHist) {
 	
 	// calculate the clipValue based on the max of the localHist:
-	float max = 0.0f;
+	unsigned int max = 0;
 	unsigned int* hist = localHist;
 	for (unsigned int i = 0; i < numBins; i++) {
-		float value = (float)hist[i];
+		unsigned int value = hist[i];
 		if (value > max) {
 			max = value;
 		}
 	}
-	float clipValue = (float)clipLimit * max;
-	//printf("max: %f, clipValue: %f\n", max, clipValue);
+	float clipValue = (float)clipLimit * (float) max;
+	printf("max: %u\tclipValue: %5u\t", max, (unsigned int)clipValue);
+	//float clipValue = (float)clipLimit * _maxVal;
+	//printf("max: %u, clipValue: %f\n", _maxVal, clipValue);
+
 
 	// calculate the total number of excess pixels
 	unsigned long excess = 0;
 	hist = localHist;
+	uint32_t count = 0;
 	for (unsigned int i = 0; i < numBins; i++) {
 		float toRemove = (float)hist[i] - clipValue;
 		if (toRemove > 0.0f) {
 			excess += (unsigned long)toRemove;
+			count++;
 		}
 	}
-	//cerr << "1. number of excess: " << excess << endl;
+	printf("excess: %u\tcount: %u\n", excess, count);
+	//cerr << "1. number of excess: " << excess << " count: " << count << endl;
 
 	// Clip histogram and redistribute excess pixels in each bin 
 	float avgInc = excess / (float) numBins;
@@ -273,7 +279,7 @@ void CLAHE::clipHistogram(float clipLimit, unsigned int numBins, unsigned int* l
 
 
 /////// MAP HISTOGRAM ///////
-// calculate the equalized lookup table (mapping) by cqlculating the CDF 
+// calculate the equalized lookup table (mapping) by calculating the CDF 
 // NOTE: lookup table is rescaled in range[min...max]
 // Max and Min are same as for the LUT creation
 void CLAHE::mapHistogram(unsigned int* localHist, unsigned int numBins, unsigned long numPixelsCR) {
@@ -665,7 +671,10 @@ void CLAHE::clahe3D(uint16_t* volume, unsigned int imageDimX, unsigned int image
 				makeHistogram3D(volume, startX, startY, startZ, endX, endY, endZ, currHist, LUT, imageDimX, imageDimY);
 
 				//printf("SB: (%d, %d, %d), \thistIndex: %d\n", currSBx, currSBy, currSBz, histIndex);
-				//printHist(currHist, numBins);
+				//if (currSBx == 0 && currSBy == 0 && currSBz == 0) {
+				//	printHist(currHist, numBins);
+				//}
+				//cerr << "first val: " << histIndex << " : " << numBins * histIndex << " : " << currHist[0] << endl;
 				//countHist(currHist, numBins);
 
 				// clip the Histogram
@@ -1000,7 +1009,7 @@ int CLAHE::CLAHE_3D(unsigned int numSBx, unsigned int numSBy, unsigned int numSB
 	}
 
 	// store the new data as a texture 
-	GLuint textureID = initTexture3D(_imgDimX, _imgDimY, _imgDimZ, GL_R16, GL_RED, GL_UNSIGNED_SHORT, GL_LINEAR, volumeData);
+	GLuint textureID = initTexture3D(_imgDimX, _imgDimY, _imgDimZ, GL_R16UI, GL_RED_INTEGER, GL_UNSIGNED_SHORT, GL_LINEAR, volumeData);
 	std::cerr << "new TextureID: " << textureID << endl;
 
 	chrono::high_resolution_clock::time_point t2 = chrono::high_resolution_clock::now();

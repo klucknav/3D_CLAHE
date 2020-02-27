@@ -1,0 +1,48 @@
+////////////////////////////////////////
+// clipHist.comp
+// clips the local Histogram according to the clipLimit for CLAHE
+////////////////////////////////////////
+
+#version 430
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;	// 64 threads
+
+// input Histogram
+layout(std430, binding = 0) buffer inHist {
+    uint hist[];
+};
+// input Histogram Max Values 
+layout(std430, binding = 1) buffer inHistMax {
+    uint histMax[];
+};
+// output the amount of excess pixels 
+layout (std430, binding = 2) buffer excessPixels {
+    uint excess[];
+};
+
+uniform ivec3 numSB;	    // number of Sub Blocks
+uniform float clipLimit;    // limit of pixel values
+
+void main() {
+
+    // figure out the sub Block histogram this index belongs to 
+    uint index = gl_GlobalInvocationID.x;
+    int totalSB = numSB.x * numSB.y * numSB.z;
+    uint histIndex = index / totalSB;
+
+    // Compute the clip value of the hist
+    uint clipValue = uint( float( histMax[ histIndex ] ) * clipLimit);  // OK
+//    uint clipValue = 55704;
+    
+    // Calculate the number of excess pixels
+    uint toRemove = hist[index] - clipValue;
+//  if (hist[index] > clipValue) {
+	if (toRemove > 0) {
+        atomicAdd( excess[ histIndex ], 1 );
+//        atomicAdd( excess[ histIndex ], toRemove );
+	}
+
+    // 4. pass 1 of redistributing the excess pixels    (clipHist_2.comp)
+
+    // 5. pass 2 of redistributing the excess pixels    (clipHist_3.comp)
+}

@@ -104,7 +104,6 @@ void SceneManager::InitScene() {
 	// load the shaders
 	_volumeShader = LoadShaders("volume.vert", "volume.frag");
 	_displayShader = LoadShaders("display.vert", "display.frag");
-	//GLuint _minMaxShader = LoadComputeShader("minMax.comp");
 
 	_drawVolume = false;
 	glm::vec3 size, imgDims, volDims;
@@ -116,7 +115,7 @@ void SceneManager::InitScene() {
 	ImageLoader* _dicomImage = new ImageLoader(path);
 	_dicomTexture = _dicomImage->GetTextureID();
 
-	// 2D CLAHE:
+	// 2D CLAHE
 	/*unsigned int numCRx = 2, numCRy = 2;
 	unsigned int numGrayValsFinal = 65536;
 	float clipLimit = 0.85f;
@@ -127,7 +126,7 @@ void SceneManager::InitScene() {
 	_claheDicomTexture = _test->CLAHE_2D(numCRx, numCRy, numGrayValsFinal, clipLimit);
 
 	// Focused 2D CLAHE
-	unsigned int xMin = 200;
+	/*unsigned int xMin = 200;
 	unsigned int xMax = 400;
 	unsigned int yMin = 200;
 	unsigned int yMax = 400;
@@ -144,11 +143,14 @@ void SceneManager::InitScene() {
 	_dicomVolumeTexture = _dicomVolume->GetTextureID();
 
 	// 3D CLAHE
-	/*CLAHE* _volumeTest = new CLAHE(_dicomVolume);
-
-	unsigned int numCRz = 4;
+	CLAHE* _volumeTest = new CLAHE(_dicomVolume);
+	
+	//unsigned int numCRx = 2, numCRy = 2,  numCRz = 1;
+	unsigned int numCRx = 4, numCRy = 4,  numCRz = 2;
+	unsigned int numGrayValsFinal = 65536;
+	float clipLimit = 0.85f;
 	_claheDicomVolumeTexture = _volumeTest->CLAHE_3D(numCRx, numCRy, numCRz, numGrayValsFinal, clipLimit);
-
+	/*
 	// Focused 3D CLAHE
 	unsigned int zMin = 50;
 	unsigned int zMax = 100;
@@ -158,49 +160,11 @@ void SceneManager::InitScene() {
 	// Using Compute Shaders
 
 	unsigned int numFinalGrayVals = 65536;
-	CLAHEshader comp = CLAHEshader(_dicomVolumeTexture, volDim, numFinalGrayVals);
+	CLAHEshader comp = CLAHEshader(_dicomVolumeTexture, volDim, numFinalGrayVals, numFinalGrayVals);
 	comp.ComputeMinMax();
 	comp.ComputeLUT();
-
-	/*GLuint layer = 1;
-	// buffer to help calculate the max/min
-	unsigned int numFinalGrayVals = 65536;
-	uint32_t data[] = { numFinalGrayVals, 0 };
-	//data[0] = numFinalGrayVals;
-	//data[1] = 0;
-
-	printf("CHECKING 1: [%d, %d]\n", data[0], data[1]);
-
-	GLuint tempBuffer;
-	glGenBuffers(1, &tempBuffer);
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, tempBuffer);
-	glBufferData(GL_SHADER_STORAGE_BUFFER, 2 * sizeof(uint32_t), data, GL_STREAM_READ);
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-
-	//// buffer to store the LUT
-	//GLuint _LUTbuffer;
-	//glGenBuffers(1, &_LUTbuffer);
-	//glBindBuffer(GL_SHADER_STORAGE_BUFFER, _LUTbuffer);
-	//glBufferData(GL_SHADER_STORAGE_BUFFER, numFinalGrayVals * sizeof(uint32_t), nullptr, GL_STREAM_READ);
-	//glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-
-	// Set up Shader 
-	glUseProgram(_minMaxShader);
-	glBindImageTexture(0, _dicomVolumeTexture, 0, GL_TRUE, layer, GL_READ_ONLY, GL_R16);
-	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, tempBuffer);
-	//glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, _LUTbuffer);
-
-	glDispatchCompute(	(GLuint)((volDim.x + 3) / 4), 
-						(GLuint)((volDim.y + 3) / 4),
-						(GLuint)((volDim.z + 3) / 4) );
-	// make sure writting to the image is finished before reading 
-	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
-	glUseProgram(0);*/
-
-	// make the LUT
-
-	//printf("CHECKING 2: [%d, %d]\n", data[0], data[1]);
-
+	comp.ComputeHist();
+	comp.ComputeClipHist();
 
 	////////////////////////////////////////////////////////////////////////////
 	// Fake Data for Testing
