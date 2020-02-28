@@ -5,7 +5,7 @@
 
 #version 440 core
 
-layout (binding = 0) uniform sampler2D texture;
+layout (binding = 0) uniform sampler2D displeyTexture;
 
 in VertexData {
 	vec2 uv;
@@ -13,10 +13,6 @@ in VertexData {
 
 out vec4 FragColor;
 
-void main()
-{
-	//FragColor = vec4(1.0, 0.0, 0.0, 1.0);
-	//FragColor = vec4(inData.uv, 1.0, 1.0);
-	FragColor = vec4(texture(texture, inData.uv).rrr, 1);
-	//FragColor = textureLod(environmentMap, inData.uv, 1.0);
+void main() {
+	FragColor = vec4(texture(displeyTexture, inData.uv).rrr, 1);
 }
