@@ -9,6 +9,7 @@
 #include "CLAHEshader.h"
 
 #include <stdio.h>
+#include <chrono>
 
 // Window Variables
 int SceneManager::_windowWidth;
@@ -143,28 +144,36 @@ void SceneManager::InitScene() {
 	_dicomVolumeTexture = _dicomVolume->GetTextureID();
 
 	// 3D CLAHE
-	CLAHE* _volumeTest = new CLAHE(_dicomVolume);
+	/*CLAHE* _volumeTest = new CLAHE(_dicomVolume);
 	
 	//unsigned int numCRx = 2, numCRy = 2,  numCRz = 1;
 	unsigned int numCRx = 4, numCRy = 4,  numCRz = 2;
 	unsigned int numGrayValsFinal = 65536;
 	float clipLimit = 0.85f;
 	_claheDicomVolumeTexture = _volumeTest->CLAHE_3D(numCRx, numCRy, numCRz, numGrayValsFinal, clipLimit);
-	/*
+	
 	// Focused 3D CLAHE
-	unsigned int zMin = 50;
-	unsigned int zMax = 100;
+	unsigned int xMin = 200, xMax = 400;
+	unsigned int yMin = 200, yMax = 400;
+	unsigned int zMin = 50,  zMax = 100;
 	_focusedDicomVolumeTexture = _volumeTest->Focused_CLAHE_3D(xMin, xMax, yMin, yMax, zMin, zMax, numGrayValsFinal, clipLimit);*/
 
 	////////////////////////////////////////////////////////////////////////////
 	// Using Compute Shaders
 
+	chrono::high_resolution_clock::time_point t1 = chrono::high_resolution_clock::now();
 	unsigned int numFinalGrayVals = 65536;
 	CLAHEshader comp = CLAHEshader(_dicomVolumeTexture, volDim, numFinalGrayVals, numFinalGrayVals);
 	comp.ComputeMinMax();
 	comp.ComputeLUT();
 	comp.ComputeHist();
 	comp.ComputeClipHist();
+
+	chrono::high_resolution_clock::time_point t2 = chrono::high_resolution_clock::now();
+	chrono::duration<double> time_span = chrono::duration_cast<chrono::duration<double>>(t2 - t1);
+
+	std::cerr << "3D CLAHE with Compute Shaders took: " << time_span.count() << " seconds.\n";
+
 
 	////////////////////////////////////////////////////////////////////////////
 	// Fake Data for Testing

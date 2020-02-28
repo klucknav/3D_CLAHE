@@ -1,6 +1,6 @@
 ////////////////////////////////////////
 // clipHist.comp
-// clips the local Histogram according to the clipLimit for CLAHE
+// Pass 1 of redistributing the excess pixels above the clipLimit for CLAHE
 ////////////////////////////////////////
 
 #version 430
@@ -15,34 +15,52 @@ layout(std430, binding = 0) buffer inHist {
 layout(std430, binding = 1) buffer inHistMax {
     uint histMax[];
 };
-// output the amount of excess pixels 
+// input the amount of excess pixels 
 layout (std430, binding = 2) buffer excessPixels {
     uint excess[];
 };
+// input the amount of excess pixels 
+layout (std430, binding = 3) buffer testBuffer {
+    uint test[];
+};
 
-uniform ivec3 numSB;	    // number of Sub Blocks
-uniform float clipLimit;    // limit of pixel values
+uniform uint NUM_BINS;      // number of gray values in the Volume 
+uniform float clipLimit;	// limit of pixel values
 
 void main() {
 
-    // figure out the sub Block histogram this index belongs to 
-    uint index = gl_GlobalInvocationID.x;
-    int totalSB = numSB.x * numSB.y * numSB.z;
-    uint histIndex = index / totalSB;
+    // figure out the sub block this index belongs to 
+	uint index = gl_GlobalInvocationID.x;
+    uint histIndex = index / NUM_BINS;
 
-    // Compute the clip value of the hist
-    uint clipValue = uint( float( histMax[ histIndex ] ) * clipLimit);  // OK
-//    uint clipValue = 55704;
-    
-    // Calculate the number of excess pixels
-    uint toRemove = hist[index] - clipValue;
-//  if (hist[index] > clipValue) {
-	if (toRemove > 0) {
-        atomicAdd( excess[ histIndex ], 1 );
-//        atomicAdd( excess[ histIndex ], toRemove );
+    // Pass 1 of redistributing the excess pixels 
+    uint avgInc =  excess[ histIndex ] / NUM_BINS;
+    uint clipValue = uint( float( histMax[ histIndex ] ) * clipLimit );
+	uint upperLimit = clipValue - avgInc ;	// Bins larger than upperLimit set to clipValue
+	// the above are OK 
+
+	test[histIndex] = avgInc;
+
+	// if the number in the histogram is too big -> clip the bin
+	uint histValue = hist[index];
+	if (histValue > clipValue) {
+		hist[ index ] = clipValue;
 	}
-
-    // 4. pass 1 of redistributing the excess pixels    (clipHist_2.comp)
-
+	else {
+		// if the value is too large remove from the bin into excess 
+		if (histValue > upperLimit) {
+			if (avgInc > 0){
+				atomicAdd( excess[ histIndex ], -int( histValue - upperLimit));
+			}
+			hist[ index ] = clipValue;
+		}
+		// otherwise put the excess into the bin
+		else {
+			if (avgInc > 0){
+				atomicAdd( excess[ histIndex ], -int(avgInc));
+				atomicAdd( hist[ index ], int(avgInc));
+			}
+		}
+	}
     // 5. pass 2 of redistributing the excess pixels    (clipHist_3.comp)
 }

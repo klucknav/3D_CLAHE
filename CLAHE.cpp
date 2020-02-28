@@ -207,56 +207,61 @@ void CLAHE::clipHistogram(float clipLimit, unsigned int numBins, unsigned int* l
 			max = value;
 		}
 	}
-	float clipValue = (float)clipLimit * (float) max;
-	printf("max: %u\tclipValue: %5u\t", max, (unsigned int)clipValue);
+	//float clipValue = (float)clipLimit * (float) max;
+	unsigned int clipValue = (unsigned int)( (float)clipLimit * max);
+	//printf("max: %u\tclipValue: %5u\t", max, clipValue);
 	//float clipValue = (float)clipLimit * _maxVal;
 	//printf("max: %u, clipValue: %f\n", _maxVal, clipValue);
 
 
 	// calculate the total number of excess pixels
-	unsigned long excess = 0;
+	unsigned int excess = 0;
 	hist = localHist;
 	uint32_t count = 0;
 	for (unsigned int i = 0; i < numBins; i++) {
-		float toRemove = (float)hist[i] - clipValue;
-		if (toRemove > 0.0f) {
-			excess += (unsigned long)toRemove;
+		int toRemove = hist[i] - clipValue;
+		if (toRemove > 0) {
+			excess += toRemove;
 			count++;
 		}
 	}
-	printf("excess: %u\tcount: %u\n", excess, count);
+	//printf("excess: %lu\tcount: %u\n", excess, count);
+	//printf("excess: %lu\t", excess);
 	//cerr << "1. number of excess: " << excess << " count: " << count << endl;
 
 	// Clip histogram and redistribute excess pixels in each bin 
-	float avgInc = excess / (float) numBins;
-	float upper = clipValue - avgInc;	// Bins larger than upper set to clipValue
+	unsigned int avgInc = excess / numBins;
+	unsigned int upper = clipValue - avgInc;	// Bins larger than upper set to clipValue
+	//printf("avgInc: %u\tupper: %u\t", avgInc, upper);
 	for (unsigned int i = 0; i < numBins; i++) {
 		// if the number in the histogram is too big -> clip the bin
 		if (localHist[i] > clipValue) {
-			localHist[i] = (unsigned int)clipValue;
+			localHist[i] = clipValue;
 		}
 		else {
 			// if the value is too large remove from the bin into excess 
 			if (localHist[i] > upper) {
-				excess -= localHist[i] - upper; 
-				localHist[i] = (unsigned int) clipValue;
+				excess -= localHist[i] - upper;
+				localHist[i] = clipValue;
 			}
 			// otherwise put the excess into the bin
 			else {
-				excess -= avgInc; 
+				excess -= avgInc;
 				localHist[i] += avgInc;
 			}
 		}
 	}
+	//printf("excess: %lu\t", excess);
 	//cerr << "2. number of excess: " << excess << endl;
 
 	// Redistribute the remaining excess pixels
-	while (excess > 0.0f) { 
+	while (excess > 0) { 
 		unsigned int* endPointer = &localHist[numBins];
 		unsigned int* histPointer = localHist;
-		while (excess > 0.0f && histPointer < endPointer) {
+		while (excess > 0 && histPointer < endPointer) {
 
 			unsigned long stepSize = (unsigned long) (numBins / excess);
+			//printf("stepSize:  %lu\t", stepSize);
 			// make sure the stepsize is at least 1
 			if (stepSize < 1) {
 				stepSize = 1;
@@ -272,8 +277,10 @@ void CLAHE::clipHistogram(float clipLimit, unsigned int numBins, unsigned int* l
 			//cerr << "3. number of excess: " << excess << endl;
 			// restart redistributing on other bin location
 			histPointer++;
+			//printf("excess: %lu\t", excess);
 		}
 	}
+	//printf("\n");
 
 }
 
@@ -823,172 +830,6 @@ int CLAHE::CLAHE_3D(unsigned int numSBx, unsigned int numSBy, unsigned int numSB
 
 	// perform CLAHE on that volume data 
 	clahe3D(volumeData, _imgDimX, _imgDimY, _imgDimZ, numSBx, numSBy, numSBz, numBins, clipLimit);
-	/*// calculate the size of the contextual regions
-	unsigned int sizeSBx = _imgDimX / numSBx;
-	unsigned int sizeSBy = _imgDimY / numSBy;
-	unsigned int sizeSBz = _imgDimZ / numSBz;
-	unsigned long numPixelsSB = (unsigned long)sizeSBx * (unsigned long)sizeSBy * (unsigned long)sizeSBz;
-
-	cerr << "\n----- 3D CLAHE -----\n";
-	printf("Num SubBlocks: %i, %i, %i, Volume size: %i, %i, %i\n", numSBx, numSBy, numSBz, _imgDimX, _imgDimY, _imgDimZ);
-	printf("Size of SubBlocks: %d, %d, %d, each with %d pixels\n\n", sizeSBx, sizeSBy, sizeSBz, numPixelsSB);
-	printf("Make LUT...Volume Range: [%d, %d], numBins: %d\n", _minVal, _maxVal, numBins);
-
-	// Make the LUT - to scale the input image from NUM_GRAY_VALS to numBins
-	uint16_t* LUT = new uint16_t[NUM_IN_GRAY_VALS];
-	makeLUT(LUT, numBins);
-
-
-	// pointer to mappings (bins)
-	unsigned int* currHist;
-	unsigned int* mappedHist = new unsigned int[numSBx * numSBy * numSBz * numBins];
-	memset(mappedHist, 0, sizeof(unsigned int) * numSBx * numSBy * numSBz * numBins);
-
-	// Calculate greylevel mappings for each sub block 
-	printf("build local histograms...\n");
-	for (unsigned int currSBz = 0; currSBz < numSBz; currSBz++) {
-		unsigned int startZ = currSBz * sizeSBz;
-		unsigned int endZ = (currSBz + 1) * sizeSBz;
-
-		for (unsigned int currSBy = 0; currSBy < numSBy; currSBy++) {
-			unsigned int startY = currSBy * sizeSBy;
-			unsigned int endY = (currSBy + 1) * sizeSBy;
-
-			for (unsigned int currSBx = 0; currSBx < numSBx; currSBx++) {
-				unsigned int startX = currSBx * sizeSBx;
-				unsigned int endX = (currSBx + 1) * sizeSBx;
-
-				// get the Histogram for the given subBlock
-				int histIndex = (currSBz * numSBy * numSBx + currSBy * numSBx + currSBx);
-				currHist = &mappedHist[numBins * (histIndex)];
-
-				// calculate the local histogram for the given subBlock
-				makeHistogram3D(_imageData, startX, startY, startZ, endX, endY, endZ, currHist, LUT, _imgDimX, _imgDimY);
-
-				//printf("SB: (%d, %d, %d), \thistIndex: %d\n", currSBx, currSBy, currSBz, histIndex);
-				//printHist(currHist, numBins);
-				//countHist(currHist, numBins);
-
-				// clip the Histogram
-				clipHistogram(clipLimit, numBins, currHist);
-
-				// calculate the cumulative histogram and re-map to [min, max]
-				mapHistogram(currHist, numBins, numPixelsSB);
-				//printHist(currHist, numBins);
-				//maxHistVal(currHist, numBins);
-			}
-		}
-	}
-
-
-	// Interpolate greylevel mappings to get CLAHE image 
-	printf("interpolate...\n");
-	unsigned int xRight, xLeft, yUp, yDown, zFront, zBack;
-	unsigned int sectionSizeX, sectionSizeY, sectionSizeZ;	// size of the vol to interpolate over
-	// pointers to the mapped histograms to interpolate between
-	unsigned int *L_Up_front, *L_Dn_front, *R_Up_front, *R_Dn_front;
-	unsigned int *L_Up_back,  *L_Dn_back,  *R_Up_back,  *R_Dn_back;
-
-	unsigned int startZ = 0;
-	for (unsigned int currSBz = 0; currSBz <= numSBz; currSBz++) {
-
-		// front depth
-		if (currSBz == 0) {
-			sectionSizeZ = sizeSBz / 2;
-			zFront = 0;					zBack = 0;
-		}
-		else {	
-			// back depth
-			if (currSBz == numSBz) {
-				sectionSizeZ = (sizeSBz + 1) / 2;
-				zFront = numSBz - 1;			zBack = zFront;
-			}
-			// default values
-			else {
-				sectionSizeZ = sizeSBz;
-				zFront = currSBz - 1;			zBack = currSBz;
-			}
-		}
-
-		unsigned int startY = 0;
-		for (unsigned int currSBy = 0; currSBy <= numSBy; currSBy++) {
-
-			// top row
-			if (currSBy == 0) {
-				sectionSizeY = sizeSBy / 2;
-				yUp = 0;			yDown = 0;
-			}
-			else {
-				// bottom row
-				if (currSBy == numSBy) {
-					sectionSizeY = (sizeSBy + 1) / 2;
-					yUp = numSBy - 1;			yDown = yUp;
-				}
-				// default values
-				else {
-					sectionSizeY = sizeSBy;
-					yUp = currSBy - 1;			yDown = currSBy;
-				}
-			}
-
-			unsigned int startX = 0;
-			for (unsigned int currSBx = 0; currSBx <= numSBx; currSBx++) {
-
-				// left column
-				if (currSBx == 0) {
-					sectionSizeX = sizeSBx / 2;
-					xLeft = 0;			xRight = 0;
-				}
-				else {
-					// special case: right column
-					if (currSBx == numSBx) {
-						sectionSizeX = (sizeSBx + 1) / 2;
-						xLeft = numSBx - 1;				xRight = xLeft;
-					}
-					// default values
-					else {
-						sectionSizeX = sizeSBx;
-						xLeft = currSBx - 1;			xRight = currSBx;
-					}
-				}
-
-				//			(currSBz * numSBy * numSBx + currSBy * numSBx + currSBx)
-				//cerr << "----------------------------------------------------------------------\n";
-				//cerr << "index: " << "currSB: " << currSBx << ", " << currSBy << ", " << currSBz << "\n";
-				//cerr << "LUF " << zFront * numSBy * numSBx + yUp   * numSBx + xLeft << " : " << "RUF " << zFront * numSBy * numSBx + yUp   * numSBx + xRight << " : "
-				//	 << "LDF " << zFront * numSBy * numSBx + yDown * numSBx + xLeft << " : " << "RDF " << zFront * numSBy * numSBx + yDown * numSBx + xRight<< endl;
-				//cerr << "LUB " << zBack  * numSBy * numSBx + yUp   * numSBx + xLeft << " : " << "RUB " << zBack  * numSBy * numSBx + yUp   * numSBx + xRight<< " : "
-				//	 << "LDB " << zBack  * numSBy * numSBx + yDown * numSBx + xLeft << " : " << "RDB " << zBack  * numSBy * numSBx + yDown * numSBx + xRight << endl;
-
-				L_Up_front = &mappedHist[numBins * (zFront * numSBy * numSBx + yUp   * numSBx + xLeft )];
-				R_Up_front = &mappedHist[numBins * (zFront * numSBy * numSBx + yUp   * numSBx + xRight)];
-				L_Dn_front = &mappedHist[numBins * (zFront * numSBy * numSBx + yDown * numSBx + xLeft )];
-				R_Dn_front = &mappedHist[numBins * (zFront * numSBy * numSBx + yDown * numSBx + xRight)];
-
-				L_Up_back = &mappedHist[numBins * (zBack * numSBy * numSBx + yUp * numSBx + xLeft)];
-				R_Up_back = &mappedHist[numBins * (zBack * numSBy * numSBx + yUp * numSBx + xRight)];
-				L_Dn_back = &mappedHist[numBins * (zBack * numSBy * numSBx + yDown * numSBx + xLeft)];
-				R_Dn_back = &mappedHist[numBins * (zBack * numSBy * numSBx + yDown * numSBx + xRight)];
-
-				lerp3D(_imageData, L_Up_front, R_Up_front, L_Dn_front, R_Dn_front, L_Up_back, R_Up_back, L_Dn_back, R_Dn_back, 
-						sectionSizeX, sectionSizeY, sectionSizeZ, startX, startY, startZ, LUT, numBins, _imgDimX, _imgDimY);
-
-				// increment the index
-				startX = startX + sectionSizeX;
-			}
-			// increment the index
-			startY = startY + sectionSizeY;
-		}
-		// increment the index
-		startZ = startZ + sectionSizeZ;
-	}
-	
-	// clean up 
-	delete[] mappedHist;
-	delete[] LUT;
-	
-	cerr << "fin\n";
-	*/
 
 	// re-distribute the pixels to the full range - for some reason values are being mapped to [0,4519] instead of [0,65535]... 
 	float max = 0.0f;
