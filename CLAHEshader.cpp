@@ -288,14 +288,6 @@ void CLAHEshader::ComputeClipHist() {
 void CLAHEshader::ComputeLerp() {
 
 	printf("lerp...");
-	//uint32_t volumeSize = _volDims.x * _volDims.y * _volDims.z;
-	//uint32_t* newVolumeData = new uint32_t[volumeSize];
-	//memset(newVolumeData, 0, volumeSize * sizeof(uint32_t));
-	//
-	//glGenBuffers(1, &_newVolumeBuffer);
-	//glBindBuffer(GL_SHADER_STORAGE_BUFFER, _newVolumeBuffer);
-	//glBufferData(GL_SHADER_STORAGE_BUFFER, volumeSize * sizeof(uint32_t), newVolumeData, GL_STREAM_READ);
-	//glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 
 	// generate the new volume texture
 	glGenTextures(1, &_newVolumeTexture);
@@ -305,9 +297,7 @@ void CLAHEshader::ComputeLerp() {
 	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_REPEAT);
 	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	//glTexStorage3D(GL_TEXTURE_3D, 1, GL_R32UI, _volDims.x, _volDims.y, _volDims.z);
-	glTexImage3D(GL_TEXTURE_3D, 1, GL_R32UI, _volDims.x, _volDims.y, _volDims.z, 0, GL_RED_INTEGER, GL_UNSIGNED_INT, NULL);
-	//glClearTexImage(_newVolumeTexture, 0, GL_RED_INTEGER, GL_UNSIGNED_BYTE, nullptr);
+	glTexStorage3D(GL_TEXTURE_3D, 1, GL_R16F, _volDims.x, _volDims.y, _volDims.z);
 	glBindTexture(GL_TEXTURE_3D, 0);
 
 
@@ -325,8 +315,7 @@ void CLAHEshader::ComputeLerp() {
 	glBindImageTexture(0, _volumeTexture, 0, GL_TRUE, _layer, GL_READ_ONLY, GL_R16UI);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, _LUTbuffer);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, _histBuffer);
-	glBindImageTexture(3, _newVolumeTexture, 0, GL_TRUE, _layer, GL_WRITE_ONLY, GL_R32UI);
-	//glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, _newVolumeBuffer);
+	glBindImageTexture(3, _newVolumeTexture, 0, GL_TRUE, _layer, GL_WRITE_ONLY, GL_R16F);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, testBuffer);
 	glUniform3i(glGetUniformLocation(_lerpShader, "numSB"), _numSB.x, _numSB.y, _numSB.z);
 	glUniform1ui(glGetUniformLocation(_lerpShader, "NUM_BINS"), _numInGrayVals);
@@ -339,27 +328,7 @@ void CLAHEshader::ComputeLerp() {
 	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
 	glUseProgram(0);
 
-	//// unmap the new volume data and store 
-	//glBindBuffer(GL_SHADER_STORAGE_BUFFER, _newVolumeBuffer);
-	//newVolumeData = (uint32_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
-	//
-	//// Store the new Volume data in a texture 
-	//glGenTextures(1, &_newVolumeTexture);
-	//glBindTexture(GL_TEXTURE_3D, _newVolumeTexture);
-	////glTexImage3D(GL_TEXTURE_3D, 0, GL_R16, _volDims.x, _volDims.y, _volDims.z, 0, GL_RED, GL_UNSIGNED_SHORT, newVolumeData); // "works"-ish
-	////glTexImage3D(GL_TEXTURE_3D, 0, GL_R16UI, _volDims.x, _volDims.y, _volDims.z, 0, GL_RED_INTEGER, GL_UNSIGNED_SHORT, newVolumeData);// nope
-	////glTexImage3D(GL_TEXTURE_3D, 0, GL_R32UI, _volDims.x, _volDims.y, _volDims.z, 0, GL_RED_INTEGER, GL_UNSIGNED_INT, newVolumeData); // nope
-	//	
-	//glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-	//glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-	//glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_REPEAT);
-	//glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	//glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	//
-	//glBindTexture(GL_TEXTURE_3D, 0);
-	//glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
 	printf("...\n");
-
 }
 
 ////////////////////////////////////////////////////////////////////////////////

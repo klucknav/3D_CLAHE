@@ -20,14 +20,7 @@ layout(std430, binding = 2) buffer inHist {
 };
 
 // output Volume Data
-layout(r32ui, binding = 3) uniform uimage3D newVolume;
-//layout(std430, binding = 3) buffer newVolumeBuffer{
-//	uint newVolume[];
-//};
-// TESTING
-layout(std430, binding = 4) buffer testBuffer{
-	uint test[];
-};
+layout(r16f, binding = 3) uniform image3D newVolume;
 
 
 uniform ivec3 numSB;	// number of Sub Blocks
@@ -140,35 +133,13 @@ void main() {
 	float p1_back = aInv * float(hist[LUB + greyValue]) / float(NUM_BINS) + a * float(hist[RUB + greyValue]) / float(NUM_BINS);
 	float p2_back = aInv * float(hist[LDB + greyValue]) / float(NUM_BINS) + a * float(hist[RDB + greyValue]) / float(NUM_BINS);
 	float q_back  = bInv * p1_back + b * p2_back;
-	
-	// bilinear interpolation - zFront
-//	float p1_front = aInv * float(hist[LUF + greyValue]) + a * float(hist[RUF + greyValue]);
-//	float p2_front = aInv * float(hist[LDF + greyValue]) + a * float(hist[RDF + greyValue]);
-//	float q_front  = bInv * p1_front + b * p2_front;
-//
-//	// bilinear interpolation - zBack
-//	float p1_back = aInv * float(hist[LUB + greyValue]) + a * float(hist[RUB + greyValue]);
-//	float p2_back = aInv * float(hist[LDB + greyValue]) + a * float(hist[RDB + greyValue]);
-//	float q_back  = bInv * p1_back + b * p2_back;
 
 	// trilinear interpolation
 	float normFactor = float(sizeBlock.x) * float(sizeBlock.y) * float(sizeBlock.z);
 	float ans = (cInv * q_front + c * q_back) / normFactor;
 
 	// store new value back into the volume texture 
-
-//	newVolume[index.z * volumeDims.x * volumeDims.y + index.y * volumeDims.x + index.x] = uint(ans * NUM_BINS);
-//	uvec4 newGrayVal = uvec4(uint(ans * NUM_BINS), 0, 0, 0);
-//	vec4 newGrayVal = vec4(ans, 0, 0, 0);
-	uvec4 newGrayVal = uvec4(greyValue, 0, 0, 0);
+//	vec4 newGrayVal = vec4(greyValue/float(NUM_BINS), 0, 0, 0);
+	vec4 newGrayVal = vec4(ans, 0, 0, 0);
 	imageStore(newVolume, ivec3(index), newGrayVal);
-//	newVolume[index.z * volumeDims.x * volumeDims.y + index.y * volumeDims.x + index.x] = greyValue;
-//	newVolume[index.z * volumeDims.x * volumeDims.y + index.y * volumeDims.x + index.x] = uint(ans * NUM_BINS);
-
-	// TESTING
-//	test[index.z * volumeDims.x * volumeDims.y + index.y * volumeDims.x + index.x] = greyValue;
-//	test[index.z * sizeBlock.x * sizeBlock.y + index.y * sizeBlock.x + index.x] = a;
-//	if (index.y == 0 && index.z == 0) {
-//		test[index.x] = uint(ans * NUM_BINS);
-//	}
 }

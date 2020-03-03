@@ -22,7 +22,6 @@ private:
 
 	// CLAHE Data
 	glm::vec3 _numSB = glm::vec3(4, 4, 2);
-	//unsigned int _totalNumSB = _numSB.x * _numSB.y * _numSB.z;
 	float _clipLimit = 0.85f;
 
 	// calculated data
