@@ -21,7 +21,7 @@ CLAHEshader::CLAHEshader(GLuint volumeTexture, glm::vec3 volDims, unsigned int f
 	_excessShader = LoadComputeShader("excess.comp");
 	_clipShader1 = LoadComputeShader("clipHist.comp");
 	_clipShader2 = LoadComputeShader("clipHist_p2.comp");
-	//_lerpShader = LoadComputeShader("lerp.comp");
+	_lerpShader = LoadComputeShader("lerp.comp");
 
 	// Volume Data 
 	_volumeTexture = volumeTexture;
@@ -41,7 +41,7 @@ CLAHEshader::~CLAHEshader() {
 	glDeleteProgram(_excessShader);
 	glDeleteProgram(_clipShader1);
 	glDeleteProgram(_clipShader2);
-	//glDeleteProgram(_lerpShader);
+	glDeleteProgram(_lerpShader);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -49,6 +49,7 @@ CLAHEshader::~CLAHEshader() {
 
 void CLAHEshader::ComputeMinMax() {
 
+	printf("LUT...");
 	// buffer to store the min/max
 	glGenBuffers(1, &_globalMinMaxBuffer);
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, _globalMinMaxBuffer);
@@ -103,6 +104,8 @@ void CLAHEshader::ComputeLUT() {
 
 void CLAHEshader::ComputeHist() {
 
+	printf("\nCompute Hist...");
+
 	// Buffer to store the Histograms
 	uint32_t histSize = _numFinalGrayVals * _numSB.x * _numSB.y * _numSB.z;
 	glGenBuffers(1, &_histBuffer);
@@ -140,7 +143,7 @@ void CLAHEshader::ComputeHist() {
 
 void CLAHEshader::ComputeClipHist() {
 
-	std::cerr << "excess ... ";
+	std::cerr << "\nexcess ... ";
 	////////////////////////////////////////////////////////////////////////////
 	// Calculate the excess pixels based on the clipLimit
 
@@ -266,7 +269,6 @@ void CLAHEshader::ComputeClipHist() {
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, _histBuffer);
 	hist = (uint32_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_WRITE);
 
-	printf("\n");
 	for (unsigned int currHistIndex = 0; currHistIndex < excessSize; currHistIndex++) {
 		uint32_t* currHist = &hist[currHistIndex * _numFinalGrayVals];
 		threads.push_back(std::thread(mapHistogram, _globalMinMax[0], _globalMinMax[1], numPixelsSB, _numFinalGrayVals, currHist));
@@ -279,11 +281,84 @@ void CLAHEshader::ComputeClipHist() {
 	glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_CLIENT_MAPPED_BUFFER_BARRIER_BIT);
 
 
-	std::cerr << "DONE\n";
+	std::cerr << "\n";
 
 }
 
 void CLAHEshader::ComputeLerp() {
+
+	printf("lerp...");
+	//uint32_t volumeSize = _volDims.x * _volDims.y * _volDims.z;
+	//uint32_t* newVolumeData = new uint32_t[volumeSize];
+	//memset(newVolumeData, 0, volumeSize * sizeof(uint32_t));
+	//
+	//glGenBuffers(1, &_newVolumeBuffer);
+	//glBindBuffer(GL_SHADER_STORAGE_BUFFER, _newVolumeBuffer);
+	//glBufferData(GL_SHADER_STORAGE_BUFFER, volumeSize * sizeof(uint32_t), newVolumeData, GL_STREAM_READ);
+	//glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+
+	// generate the new volume texture
+	glGenTextures(1, &_newVolumeTexture);
+	glBindTexture(GL_TEXTURE_3D, _newVolumeTexture);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	//glTexStorage3D(GL_TEXTURE_3D, 1, GL_R32UI, _volDims.x, _volDims.y, _volDims.z);
+	glTexImage3D(GL_TEXTURE_3D, 1, GL_R32UI, _volDims.x, _volDims.y, _volDims.z, 0, GL_RED_INTEGER, GL_UNSIGNED_INT, NULL);
+	//glClearTexImage(_newVolumeTexture, 0, GL_RED_INTEGER, GL_UNSIGNED_BYTE, nullptr);
+	glBindTexture(GL_TEXTURE_3D, 0);
+
+
+	uint32_t testSize = _volDims.x * _volDims.y * _volDims.z;
+	uint32_t* testing = new uint32_t[testSize];
+	memset(testing, 0, testSize * sizeof(uint32_t));
+	GLuint testBuffer;
+	glGenBuffers(1, &testBuffer);
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, testBuffer);
+	glBufferData(GL_SHADER_STORAGE_BUFFER, testSize * sizeof(uint32_t), testing, GL_STREAM_READ);
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+
+	// Set up Compute Shader 
+	glUseProgram(_lerpShader);
+	glBindImageTexture(0, _volumeTexture, 0, GL_TRUE, _layer, GL_READ_ONLY, GL_R16UI);
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, _LUTbuffer);
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, _histBuffer);
+	glBindImageTexture(3, _newVolumeTexture, 0, GL_TRUE, _layer, GL_WRITE_ONLY, GL_R32UI);
+	//glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, _newVolumeBuffer);
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, testBuffer);
+	glUniform3i(glGetUniformLocation(_lerpShader, "numSB"), _numSB.x, _numSB.y, _numSB.z);
+	glUniform1ui(glGetUniformLocation(_lerpShader, "NUM_BINS"), _numInGrayVals);
+
+	glDispatchCompute(	(GLuint)((_volDims.x + 3) / 4),
+						(GLuint)((_volDims.y + 3) / 4),
+						(GLuint)((_volDims.z + 3) / 4));
+
+	// make sure writting to the image is finished before reading 
+	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
+	glUseProgram(0);
+
+	//// unmap the new volume data and store 
+	//glBindBuffer(GL_SHADER_STORAGE_BUFFER, _newVolumeBuffer);
+	//newVolumeData = (uint32_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
+	//
+	//// Store the new Volume data in a texture 
+	//glGenTextures(1, &_newVolumeTexture);
+	//glBindTexture(GL_TEXTURE_3D, _newVolumeTexture);
+	////glTexImage3D(GL_TEXTURE_3D, 0, GL_R16, _volDims.x, _volDims.y, _volDims.z, 0, GL_RED, GL_UNSIGNED_SHORT, newVolumeData); // "works"-ish
+	////glTexImage3D(GL_TEXTURE_3D, 0, GL_R16UI, _volDims.x, _volDims.y, _volDims.z, 0, GL_RED_INTEGER, GL_UNSIGNED_SHORT, newVolumeData);// nope
+	////glTexImage3D(GL_TEXTURE_3D, 0, GL_R32UI, _volDims.x, _volDims.y, _volDims.z, 0, GL_RED_INTEGER, GL_UNSIGNED_INT, newVolumeData); // nope
+	//	
+	//glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	//glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+	//glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_REPEAT);
+	//glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	//glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	//
+	//glBindTexture(GL_TEXTURE_3D, 0);
+	//glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
+	printf("...\n");
 
 }
 
@@ -294,7 +369,7 @@ void mapHistogram(uint32_t minVal, uint32_t maxVal, uint32_t numPixelsSB, uint32
 
 	float sum = 0;
 	const float scale = ((float)(maxVal - minVal)) / (float)numPixelsSB;
-	printf("min: %u, \tmax: %u, \tnumPixels: %u, \tnumBins: %u\n", minVal, maxVal, numPixelsSB, numBins);
+	//printf("min: %u, \tmax: %u, \tnumPixels: %u, \tnumBins: %u\n", minVal, maxVal, numPixelsSB, numBins);
 
 	// for each bin
 	for (unsigned int i = 0; i < numBins; i++) {

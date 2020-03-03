@@ -168,6 +168,8 @@ void SceneManager::InitScene() {
 	comp.ComputeLUT();
 	comp.ComputeHist();
 	comp.ComputeClipHist();
+	comp.ComputeLerp();
+	_claheDicomVolumeTexture = comp.GetNewTexture();
 
 	chrono::high_resolution_clock::time_point t2 = chrono::high_resolution_clock::now();
 	chrono::duration<double> time_span = chrono::duration_cast<chrono::duration<double>>(t2 - t1);
@@ -371,7 +373,7 @@ void SceneManager::printMat(glm::mat4 toPrint) {
 
 void SceneManager::printVec(glm::vec3 toPrint) {
 
-	printf("(%f, %f, %f)\n", toPrint.x, toPrint.y, toPrint.z);
+	printf("(%.0f, %.0f, %.0f)\n", toPrint.x, toPrint.y, toPrint.z);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

@@ -12,7 +12,7 @@ private:
 	// compute shaders
 	GLuint _minMaxShader, _LUTshader;
 	GLuint _histShader, _excessShader, _clipShader1, _clipShader2;
-	//GLuint _lerpShader;
+	GLuint _lerpShader;
 
 	// volume data 
 	GLuint _volumeTexture;
@@ -27,7 +27,8 @@ private:
 
 	// calculated data
 	uint32_t _globalMinMax[2];
-	//uint32_t _LUT[2];
+	GLuint _newVolumeBuffer;
+	GLuint _newVolumeTexture;
 
 	// buffers 
 	GLuint _globalMinMaxBuffer, _LUTbuffer, _histBuffer;
@@ -45,4 +46,6 @@ public:
 	void ComputeHist();
 	void ComputeClipHist();
 	void ComputeLerp();
+
+	GLuint GetNewTexture() { return _newVolumeTexture; }
 };
