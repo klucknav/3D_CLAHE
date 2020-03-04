@@ -31,9 +31,8 @@ private:
 
 
 	// Main CLAHE function
-	void clahe2D(uint16_t* image, unsigned int imageDimX, unsigned int imageDimY, unsigned int numCRx, unsigned int numCRy, unsigned int numBins, float clipLimit);
-	void clahe3D(uint16_t* volume, unsigned int imageDimX, unsigned int imageDimY, unsigned int imageDimZ, 
-				unsigned int numSBx, unsigned int numSBy, unsigned int numSBz, unsigned int numBins, float clipLimit);
+	void clahe2D(uint16_t* image, glm::uvec2 imageDim, glm::uvec2 numCR, unsigned int numBins, float clipLimit);
+	void clahe3D(uint16_t* volume, glm::uvec3 imageDim, glm::uvec3 numSB, unsigned int numBins, float clipLimit);
 
 	// CLAHE Helper Methods
 	void makeLUT(uint16_t* LUT, unsigned int numBins);
@@ -67,11 +66,10 @@ public:
 	CLAHE(uint16_t* img, glm::vec3 imgDims, unsigned int min, unsigned int max);
 	~CLAHE();
 
-	int CLAHE_2D(unsigned int numCRx, unsigned int numCRy, unsigned int numBins, float clipLimit);
-	int CLAHE_3D(unsigned int numCRx, unsigned int numCRy, unsigned int numCRz, unsigned int numBins, float clipLimit);
+	int CLAHE_2D(glm::uvec2 numCR, unsigned int numBins, float clipLimit);
+	int CLAHE_3D(glm::uvec3 numSB, unsigned int numBins, float clipLimit);
 
-	int Focused_CLAHE_2D(unsigned int minX, unsigned int minY, unsigned int maxX, unsigned int maxY, unsigned int numBins, float clipLimit);
-	int Focused_CLAHE_3D(unsigned int minX, unsigned int maxX, unsigned int minY, unsigned int maxY, unsigned int minZ, unsigned int maxZ, 
-						unsigned int numBins, float clipLimit);
+	int Focused_CLAHE_2D(glm::uvec2 min, glm::uvec2 max, unsigned int numBins, float clipLimit);
+	int Focused_CLAHE_3D(glm::uvec3 min, glm::uvec3 max, unsigned int numBins, float clipLimit);
 
 };

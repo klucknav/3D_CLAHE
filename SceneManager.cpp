@@ -117,21 +117,20 @@ void SceneManager::InitScene() {
 	_dicomTexture = _dicomImage->GetTextureID();
 
 	// 2D CLAHE
-	/*unsigned int numCRx = 2, numCRy = 2;
-	unsigned int numGrayValsFinal = 65536;
-	float clipLimit = 0.85f;
+	glm::uvec2 numCR = glm::uvec2(2, 2);
+	//glm::uvec2 numCR = glm::uvec2(4, 4);
+	unsigned int numGrayValsFinal2D = 65536;
+	float clipLimit2D = 0.85f;
 
 	CLAHE * _test = new CLAHE(_dicomImage);
 
 	// Regular 2D CLAHE
-	_claheDicomTexture = _test->CLAHE_2D(numCRx, numCRy, numGrayValsFinal, clipLimit);
+	_claheDicomTexture = _test->CLAHE_2D(numCR, numGrayValsFinal2D, clipLimit2D);
 
 	// Focused 2D CLAHE
-	/*unsigned int xMin = 200;
-	unsigned int xMax = 400;
-	unsigned int yMin = 200;
-	unsigned int yMax = 400;
-	_focusedDicomTexture = _test->Focused_CLAHE_2D(xMin, yMin, xMax, yMax, numGrayValsFinal, clipLimit);*/
+	glm::uvec2 min2D = glm::uvec2(200, 200);
+	glm::uvec2 max2D = glm::uvec2(400, 400);
+	_focusedDicomTexture = _test->Focused_CLAHE_2D(min2D, max2D, numGrayValsFinal2D, clipLimit2D);
 
 	////////////////////////////////////////////////////////////////////////////
 	// 3D CLAHE - Cube Volume 
@@ -142,34 +141,30 @@ void SceneManager::InitScene() {
 	_dicomVolumeTexture = _dicomVolume->GetTextureID();
 
 	// 3D CLAHE
-	CLAHE* _volumeTest = new CLAHE(_dicomVolume);
+	//glm::uvec3 numSB = glm::uvec3(2, 2, 1);
+	glm::uvec3 numSB = glm::uvec3(4, 4, 2);
+	unsigned int numGrayValsFinal3D = 65536;
+	float clipLimit3D = 0.85f;
 	
-	//unsigned int numCRx = 2, numCRy = 2,  numCRz = 1;
-	unsigned int numCRx = 4, numCRy = 4,  numCRz = 2;
-	unsigned int numGrayValsFinal = 65536;
-	float clipLimit = 0.85f;
-	_claheDicomVolumeTexture = _volumeTest->CLAHE_3D(numCRx, numCRy, numCRz, numGrayValsFinal, clipLimit);
+	CLAHE* _volumeTest = new CLAHE(_dicomVolume);
+
+	// Regular 3D CLAHE
+	_claheDicomVolumeTexture = _volumeTest->CLAHE_3D(numSB, numGrayValsFinal3D, clipLimit3D);
 	
 	// Focused 3D CLAHE
-	unsigned int xMin = 200, xMax = 400;
-	unsigned int yMin = 200, yMax = 400;
-	unsigned int zMin = 50,  zMax = 100;
-	_focusedDicomVolumeTexture = _volumeTest->Focused_CLAHE_3D(xMin, xMax, yMin, yMax, zMin, zMax, numGrayValsFinal, clipLimit);
+	glm::uvec3 min3D = glm::uvec3(200, 200, 50);
+	glm::uvec3 max3D = glm::uvec3(400, 400, 100);
+	_focusedDicomVolumeTexture = _volumeTest->Focused_CLAHE_3D(min3D, max3D, numGrayValsFinal3D, clipLimit3D);
 
 	////////////////////////////////////////////////////////////////////////////
 	// Using Compute Shaders
 
-	//chrono::high_resolution_clock::time_point t1 = chrono::high_resolution_clock::now();
-
-	//unsigned int numFinalGrayVals = 65536;
-	//ComputeCLAHE comp = ComputeCLAHE(_dicomVolumeTexture, volDim, numFinalGrayVals, numFinalGrayVals);
-	//_claheDicomVolumeTexture = comp.Compute3D_CLAHE(glm::uvec3(4,4,2));
-	//_focusedDicomVolumeTexture = comp.ComputeFocused3D_CLAHE(glm::uvec3(200, 200, 50), glm::uvec3(400, 400, 100));
-
-	//chrono::high_resolution_clock::time_point t2 = chrono::high_resolution_clock::now();
-	//chrono::duration<double> time_span = chrono::duration_cast<chrono::duration<double>>(t2 - t1);
-	//std::cerr << "3D CLAHE with Compute Shaders took: " << time_span.count() << " seconds.\n";
-
+	unsigned int numFinalGrayVals = 65536;
+	ComputeCLAHE comp = ComputeCLAHE(_dicomVolumeTexture, volDim, numFinalGrayVals, numFinalGrayVals);
+	_focusedDicomVolumeTexture = comp.Compute3D_CLAHE(numSB);
+	//_claheDicomVolumeTexture = comp.Compute3D_CLAHE(numSB);
+	//_focusedDicomVolumeTexture = comp.ComputeFocused3D_CLAHE(min3D, max3D);
+	
 
 	////////////////////////////////////////////////////////////////////////////
 	// Fake Data for Testing

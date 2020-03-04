@@ -419,16 +419,15 @@ void CLAHE::lerp3D(uint16_t* volume,
 // numCR_    - Number of contextial regions in the _ direction (min 2, max uiMAX_REG_X/Y)
 // numBins	 - Number of greyvalues for histogram (final number of grayvalues)
 // cliplimit - Normalized cliplimit (higher values give more contrast)
-void CLAHE::clahe2D(uint16_t* image, unsigned int imageDimX, unsigned int imageDimY, 
-					unsigned int numCRx, unsigned int numCRy, unsigned int numBins, float clipLimit) {
+void CLAHE::clahe2D(uint16_t* image, glm::uvec2 imageDim, glm::uvec2 numCR, unsigned int numBins, float clipLimit) {
 
 
 	// calculate the size of the contextual regions
-	unsigned int sizeCRx = imageDimX / numCRx;
-	unsigned int sizeCRy = imageDimY / numCRy;
+	unsigned int sizeCRx = imageDim.x / numCR.x;
+	unsigned int sizeCRy = imageDim.y / numCR.y;
 	unsigned long numPixelsCR = (unsigned long)sizeCRx * (unsigned long)sizeCRy;
 
-	printf("Num Contextual Regions: %i, %i, Image size: %i, %i\n", numCRx, numCRy, imageDimX, imageDimY);
+	printf("Num Contextual Regions: %i, %i, Image size: %i, %i\n", numCR.x, numCR.y, imageDim.x, imageDim.y);
 	printf("Size of Contextual Regions: %d, %d, each with %d pixels\n\n", sizeCRx, sizeCRy, numPixelsCR);
 	printf("Make LUT...Image Range: [%d, %d], numBins: %d\n", _minVal, _maxVal, numBins);
 
@@ -439,22 +438,22 @@ void CLAHE::clahe2D(uint16_t* image, unsigned int imageDimX, unsigned int imageD
 
 	// pointer to mappings (bins)
 	unsigned int* currHist;
-	unsigned int* mappedHist = new unsigned int[numCRx * numCRy * numBins];
-	memset(mappedHist, 0, sizeof(unsigned int) * numCRx * numCRy * numBins);
+	unsigned int* mappedHist = new unsigned int[numCR.x * numCR.y * numBins];
+	memset(mappedHist, 0, sizeof(unsigned int) * numCR.x * numCR.y * numBins);
 
 	// Calculate greylevel mappings for each contextual region 
 	printf("build local histograms...\n");
-	for (unsigned int currCRy = 0; currCRy < numCRy; currCRy++) {
+	for (unsigned int currCRy = 0; currCRy < numCR.y; currCRy++) {
 		unsigned int startY = currCRy * sizeCRy;
 		unsigned int endY = (currCRy + 1) * sizeCRy;
 
-		for (unsigned int currCRx = 0; currCRx < numCRx; currCRx++) {
+		for (unsigned int currCRx = 0; currCRx < numCR.x; currCRx++) {
 			unsigned int startX = currCRx * sizeCRx;
 			unsigned int endX = (currCRx + 1) * sizeCRx;
 
 			// calculate the local histogram for the given contextual region
-			currHist = &mappedHist[numBins * (currCRy * numCRx + currCRx)];
-			makeHistogram2D(image, currHist, LUT, startX, startY, endX, endY, imageDimX);
+			currHist = &mappedHist[numBins * (currCRy * numCR.x + currCRx)];
+			makeHistogram2D(image, currHist, LUT, startX, startY, endX, endY, imageDim.x);
 
 			// clip the histogram
 			clipHistogram(clipLimit, numBins, currHist);
@@ -472,7 +471,7 @@ void CLAHE::clahe2D(uint16_t* image, unsigned int imageDimX, unsigned int imageD
 	unsigned int* L_Up, * L_Dn, * R_Up, * R_Dn;
 
 	unsigned int startY = 0;
-	for (unsigned int currCRy = 0; currCRy <= numCRy; currCRy++) {
+	for (unsigned int currCRy = 0; currCRy <= numCR.y; currCRy++) {
 
 		// top row
 		if (currCRy == 0) {
@@ -481,9 +480,9 @@ void CLAHE::clahe2D(uint16_t* image, unsigned int imageDimX, unsigned int imageD
 		}
 		else {
 			// bottom row
-			if (currCRy == numCRy) {
+			if (currCRy == numCR.y) {
 				subY = (sizeCRy + 1) / 2;
-				yUp = numCRy - 1;			yDown = yUp;
+				yUp = numCR.y - 1;			yDown = yUp;
 			}
 			// default values
 			else {
@@ -493,7 +492,7 @@ void CLAHE::clahe2D(uint16_t* image, unsigned int imageDimX, unsigned int imageD
 		}
 
 		unsigned int startX = 0;
-		for (unsigned int currCRx = 0; currCRx <= numCRx; currCRx++) {
+		for (unsigned int currCRx = 0; currCRx <= numCR.x; currCRx++) {
 
 			// left column
 			if (currCRx == 0) {
@@ -502,9 +501,9 @@ void CLAHE::clahe2D(uint16_t* image, unsigned int imageDimX, unsigned int imageD
 			}
 			else {
 				// special case: right column
-				if (currCRx == numCRx) {
+				if (currCRx == numCR.x) {
 					subX = (sizeCRx + 1) / 2;
-					xLeft = numCRx - 1;				xRight = xLeft;
+					xLeft = numCR.x - 1;				xRight = xLeft;
 				}
 				// default values
 				else {
@@ -513,18 +512,12 @@ void CLAHE::clahe2D(uint16_t* image, unsigned int imageDimX, unsigned int imageD
 				}
 			}
 
-			L_Up = &mappedHist[numBins * (yUp * numCRx + xLeft)];
-			R_Up = &mappedHist[numBins * (yUp * numCRx + xRight)];
-			L_Dn = &mappedHist[numBins * (yDown * numCRx + xLeft)];
-			R_Dn = &mappedHist[numBins * (yDown * numCRx + xRight)];
+			L_Up = &mappedHist[numBins * (yUp * numCR.x + xLeft)];
+			R_Up = &mappedHist[numBins * (yUp * numCR.x + xRight)];
+			L_Dn = &mappedHist[numBins * (yDown * numCR.x + xLeft)];
+			R_Dn = &mappedHist[numBins * (yDown * numCR.x + xRight)];
 
-			//cerr << "L_up: " << numBins * (yUp * numCRx + xLeft) << endl;
-			//cerr << "R_up: " << numBins * (yUp * numCRx + xRight) << endl;
-			//cerr << "L_dn: " << numBins * (yDown * numCRx + xLeft) << endl;
-			//cerr << "R_dn: " << numBins * (yDown * numCRx + xRight) << endl;
-			//cerr << "-----\n";
-
-			lerp2D(image, L_Up, R_Up, L_Dn, R_Dn, subX, subY, startX, startY, LUT, numBins, imageDimX);
+			lerp2D(image, L_Up, R_Up, L_Dn, R_Dn, subX, subY, startX, startY, LUT, numBins, imageDim.x);
 
 			startX = startX + subX;
 		}
@@ -535,24 +528,22 @@ void CLAHE::clahe2D(uint16_t* image, unsigned int imageDimX, unsigned int imageD
 	delete[] mappedHist;
 	delete[] LUT;
 
-	std::cerr << "fin\n\n";
-
-	//return image;
+	std::cerr << "\n";
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////
 // Public 2D CLAHE Methods
 
-int CLAHE::CLAHE_2D(unsigned int numCRx, unsigned int numCRy, unsigned int numBins, float clipLimit) {
+int CLAHE::CLAHE_2D(glm::uvec2 numCR, unsigned int numBins, float clipLimit) {
 
 	printf("\n----- 2D CLAHE -----\n");
 
 	chrono::high_resolution_clock::time_point t1 = chrono::high_resolution_clock::now();
 
 	// error checking 
-	if (numCRx > _maxNumCR_X) return -1;		// # of x critical regions too large
-	if (numCRy > _maxNumCR_Y) return -2;		// # of y critical regions too large
+	if (numCR.x > _maxNumCR_X) return -1;		// # of x critical regions too large
+	if (numCR.y > _maxNumCR_Y) return -2;		// # of y critical regions too large
 	if (clipLimit == 1.0) return 0;				// return original image
 	if (numBins == 0) numBins = NUM_IN_GRAY_VALS;	// default value when not specified
 
@@ -561,7 +552,7 @@ int CLAHE::CLAHE_2D(unsigned int numCRx, unsigned int numCRy, unsigned int numBi
 	memcpy(imageData, _imageData, sizeof(uint16_t) * _imgDimX * _imgDimY);
 
 	// perform CLAHE on that image data 
-	clahe2D(imageData, _imgDimX, _imgDimY, numCRx, numCRy, numBins, clipLimit);
+	clahe2D(imageData, glm::uvec2(_imgDimX, _imgDimY), numCR, numBins, clipLimit);
 
 	// store the new data as a texture 
 	GLuint textureID = initTexture2D(_imgDimX, _imgDimY, GL_R16, GL_RED, GL_UNSIGNED_SHORT, GL_LINEAR, imageData);
@@ -571,24 +562,25 @@ int CLAHE::CLAHE_2D(unsigned int numCRx, unsigned int numCRy, unsigned int numBi
 
 	cerr << "2D CLAHE took: " << time_span.count() << " seconds.\n";
 
-	float max = 0.0f;
-	uint16_t* vol = imageData;
-	for (unsigned int i = 0; i < _imgDimX * _imgDimY * _imgDimZ; i++) {
-		float value = vol[i];
-		if (value > max) {
-			max = value;
-		}
-	}
-	printf("max: %f\n\n", max);
+	//float max = 0.0f;
+	//uint16_t* vol = imageData;
+	//for (unsigned int i = 0; i < _imgDimX * _imgDimY * _imgDimZ; i++) {
+	//	float value = vol[i];
+	//	if (value > max) {
+	//		max = value;
+	//	}
+	//}
+	//printf("max: %f\n\n", max);
+	printf("\n");
 	return textureID;
 }
 
-int CLAHE::Focused_CLAHE_2D(unsigned int xMin, unsigned int yMin, unsigned int xMax, unsigned int yMax, unsigned int numBins, float clipLimit) {
+int CLAHE::Focused_CLAHE_2D(glm::uvec2 min, glm::uvec2 max, unsigned int numBins, float clipLimit) {
 	
 	chrono::high_resolution_clock::time_point t1 = chrono::high_resolution_clock::now();
 
-	unsigned int xDim = (xMax - xMin);
-	unsigned int yDim = (yMax - yMin);
+	unsigned int xDim = (max.x - min.x);
+	unsigned int yDim = (max.y - min.y);
 
 	// get the data from the image 
 	uint16_t* imageData = new uint16_t[_imgDimX * _imgDimY];
@@ -597,24 +589,24 @@ int CLAHE::Focused_CLAHE_2D(unsigned int xMin, unsigned int yMin, unsigned int x
 	// take out the section you want to enhance
 	uint16_t* subImageData = new uint16_t[ xDim * yDim ];
 	memset(subImageData, 0, sizeof(uint16_t) * xDim * yDim);
-	for (unsigned int xIndex = xMin, x = 0; xIndex < xMax; xIndex++, x++) {
-		for (unsigned int yIndex = yMin, y = 0; yIndex < yMax; yIndex++, y++) {
+	for (unsigned int xIndex = min.x, x = 0; xIndex < max.x; xIndex++, x++) {
+		for (unsigned int yIndex = min.y, y = 0; yIndex < max.y; yIndex++, y++) {
 			subImageData[y * xDim + x] = imageData[yIndex * _imgDimX + xIndex];
 		}
 	}
 
 	// Determine the number of CR
-	unsigned int numCRx = max((int)(xDim / 100), 1);
-	unsigned int numCRy = max((int)(yDim / 100), 1);
+	unsigned int numCRx = std::max((int)(xDim / 100), 1);
+	unsigned int numCRy = std::max((int)(yDim / 100), 1);
 
 	// perform CLAHE on the selected region
 	printf("\n----- Focused 2D CLAHE -----\n");
-	printf("x range: [%d, %d], y range: [%d, %d]\n", xMin, xMax, yMin, yMax);
-	clahe2D(subImageData, xDim, yDim, numCRx, numCRy, numBins, clipLimit);
+	printf("x range: [%d, %d], y range: [%d, %d]\n", min.x, max.x, min.y, max.y);
+	clahe2D(subImageData, glm::uvec2(xDim, yDim), glm::uvec2(numCRx, numCRy), numBins, clipLimit);
 
 	// put the section back into the image
-	for (unsigned int xIndex = xMin, x = 0; xIndex < xMax; xIndex++, x++) {
-		for (unsigned int yIndex = yMin, y = 0; yIndex < yMax; yIndex++, y++) {
+	for (unsigned int xIndex = min.x, x = 0; xIndex < max.x; xIndex++, x++) {
+		for (unsigned int yIndex = min.y, y = 0; yIndex < max.y; yIndex++, y++) {
 			imageData[yIndex * _imgDimX + xIndex] = subImageData[y * xDim + x];
 		}
 	}
@@ -631,19 +623,19 @@ int CLAHE::Focused_CLAHE_2D(unsigned int xMin, unsigned int yMin, unsigned int x
 ////////////////////////////////////////////////////////////////////////////////
 // 3D version of CLAHE
 //
-// numCR_   - Number of contextial regions in the _ direction (min 2, max uiMAX_REG_X/Y/Z)
+// volDim   - Dimensions of the volume you are performing CLAHE on
+// numSB    - Number of sub blocks in the x/y/z direction (min 2, max uiMAX_REG_X/Y/Z)
 // numBins	- Number of greyvalues for histogram (final number of grayvalues)
 // cliplimit- Normalized cliplimit (higher values give more contrast)
-void CLAHE::clahe3D(uint16_t* volume, unsigned int imageDimX, unsigned int imageDimY, unsigned int imageDimZ,
-	unsigned int numSBx, unsigned int numSBy, unsigned int numSBz, unsigned int numBins, float clipLimit) {
+void CLAHE::clahe3D(uint16_t* volume, glm::uvec3 volDim, glm::uvec3 numSB, unsigned int numBins, float clipLimit) {
 
 	// calculate the size of the contextual regions
-	unsigned int sizeSBx = imageDimX / numSBx;
-	unsigned int sizeSBy = imageDimY / numSBy;
-	unsigned int sizeSBz = imageDimZ / numSBz;
+	unsigned int sizeSBx = volDim.x / numSB.x;
+	unsigned int sizeSBy = volDim.y / numSB.y;
+	unsigned int sizeSBz = volDim.z / numSB.z;
 	unsigned long numPixelsSB = (unsigned long)sizeSBx * (unsigned long)sizeSBy * (unsigned long)sizeSBz;
 
-	printf("Num SubBlocks: %i, %i, %i, Volume size: %i, %i, %i\n", numSBx, numSBy, numSBz, _imgDimX, _imgDimY, _imgDimZ);
+	printf("Num SubBlocks: %i, %i, %i, Volume size: %i, %i, %i\n", numSB.x, numSB.y, numSB.z, _imgDimX, _imgDimY, _imgDimZ);
 	printf("Size of SubBlocks: %d, %d, %d, each with %d pixels\n\n", sizeSBx, sizeSBy, sizeSBz, numPixelsSB);
 	printf("Make LUT...Volume Range: [%d, %d], numBins: %d\n", _minVal, _maxVal, numBins);
 
@@ -653,44 +645,35 @@ void CLAHE::clahe3D(uint16_t* volume, unsigned int imageDimX, unsigned int image
 
 	// pointer to mappings (bins)
 	unsigned int* currHist;
-	unsigned int* mappedHist = new unsigned int[numSBx * numSBy * numSBz * numBins];
-	memset(mappedHist, 0, sizeof(unsigned int) * numSBx * numSBy * numSBz * numBins);
+	unsigned int* mappedHist = new unsigned int[numSB.x * numSB.y * numSB.z * numBins];
+	memset(mappedHist, 0, sizeof(unsigned int) * numSB.x * numSB.y * numSB.z * numBins);
 
 	// Calculate greylevel mappings for each sub block 
 	printf("build local histograms...\n");
-	for (unsigned int currSBz = 0; currSBz < numSBz; currSBz++) {
+	for (unsigned int currSBz = 0; currSBz < numSB.z; currSBz++) {
 		unsigned int startZ = currSBz * sizeSBz;
 		unsigned int endZ = (currSBz + 1) * sizeSBz;
 
-		for (unsigned int currSBy = 0; currSBy < numSBy; currSBy++) {
+		for (unsigned int currSBy = 0; currSBy < numSB.y; currSBy++) {
 			unsigned int startY = currSBy * sizeSBy;
 			unsigned int endY = (currSBy + 1) * sizeSBy;
 
-			for (unsigned int currSBx = 0; currSBx < numSBx; currSBx++) {
+			for (unsigned int currSBx = 0; currSBx < numSB.x; currSBx++) {
 				unsigned int startX = currSBx * sizeSBx;
 				unsigned int endX = (currSBx + 1) * sizeSBx;
 
 				// get the Histogram for the given subBlock
-				int histIndex = (currSBz * numSBy * numSBx + currSBy * numSBx + currSBx);
+				int histIndex = (currSBz * numSB.y * numSB.x + currSBy * numSB.x + currSBx);
 				currHist = &mappedHist[numBins * (histIndex)];
 
 				// calculate the local histogram for the given subBlock
-				makeHistogram3D(volume, startX, startY, startZ, endX, endY, endZ, currHist, LUT, imageDimX, imageDimY);
-
-				//printf("SB: (%d, %d, %d), \thistIndex: %d\n", currSBx, currSBy, currSBz, histIndex);
-				//if (currSBx == 0 && currSBy == 0 && currSBz == 0) {
-				//	printHist(currHist, numBins);
-				//}
-				//cerr << "first val: " << histIndex << " : " << numBins * histIndex << " : " << currHist[0] << endl;
-				//countHist(currHist, numBins);
+				makeHistogram3D(volume, startX, startY, startZ, endX, endY, endZ, currHist, LUT, volDim.x, volDim.y);
 
 				// clip the Histogram
 				clipHistogram(clipLimit, numBins, currHist);
 
 				// calculate the cumulative histogram and re-map to [min, max]
 				mapHistogram(currHist, numBins, numPixelsSB);
-				//printHist(currHist, numBins);
-				//maxHistVal(currHist, numBins);
 			}
 		}
 	}
@@ -704,7 +687,7 @@ void CLAHE::clahe3D(uint16_t* volume, unsigned int imageDimX, unsigned int image
 	unsigned int* L_Up_back, * L_Dn_back, * R_Up_back, * R_Dn_back;
 
 	unsigned int startZ = 0;
-	for (unsigned int currSBz = 0; currSBz <= numSBz; currSBz++) {
+	for (unsigned int currSBz = 0; currSBz <= numSB.z; currSBz++) {
 
 		// front depth
 		if (currSBz == 0) {
@@ -713,9 +696,9 @@ void CLAHE::clahe3D(uint16_t* volume, unsigned int imageDimX, unsigned int image
 		}
 		else {
 			// back depth
-			if (currSBz == numSBz) {
+			if (currSBz == numSB.z) {
 				sectionSizeZ = (sizeSBz + 1) / 2;
-				zFront = numSBz - 1;			zBack = zFront;
+				zFront = numSB.z - 1;			zBack = zFront;
 			}
 			// default values
 			else {
@@ -725,7 +708,7 @@ void CLAHE::clahe3D(uint16_t* volume, unsigned int imageDimX, unsigned int image
 		}
 
 		unsigned int startY = 0;
-		for (unsigned int currSBy = 0; currSBy <= numSBy; currSBy++) {
+		for (unsigned int currSBy = 0; currSBy <= numSB.y; currSBy++) {
 
 			// top row
 			if (currSBy == 0) {
@@ -734,9 +717,9 @@ void CLAHE::clahe3D(uint16_t* volume, unsigned int imageDimX, unsigned int image
 			}
 			else {
 				// bottom row
-				if (currSBy == numSBy) {
+				if (currSBy == numSB.y) {
 					sectionSizeY = (sizeSBy + 1) / 2;
-					yUp = numSBy - 1;			yDown = yUp;
+					yUp = numSB.y - 1;			yDown = yUp;
 				}
 				// default values
 				else {
@@ -746,7 +729,7 @@ void CLAHE::clahe3D(uint16_t* volume, unsigned int imageDimX, unsigned int image
 			}
 
 			unsigned int startX = 0;
-			for (unsigned int currSBx = 0; currSBx <= numSBx; currSBx++) {
+			for (unsigned int currSBx = 0; currSBx <= numSB.x; currSBx++) {
 
 				// left column
 				if (currSBx == 0) {
@@ -755,9 +738,9 @@ void CLAHE::clahe3D(uint16_t* volume, unsigned int imageDimX, unsigned int image
 				}
 				else {
 					// special case: right column
-					if (currSBx == numSBx) {
+					if (currSBx == numSB.x) {
 						sectionSizeX = (sizeSBx + 1) / 2;
-						xLeft = numSBx - 1;				xRight = xLeft;
+						xLeft = numSB.x - 1;				xRight = xLeft;
 					}
 					// default values
 					else {
@@ -766,26 +749,18 @@ void CLAHE::clahe3D(uint16_t* volume, unsigned int imageDimX, unsigned int image
 					}
 				}
 
-				//			(currSBz * numSBy * numSBx + currSBy * numSBx + currSBx)
-				//cerr << "----------------------------------------------------------------------\n";
-				//cerr << "index: " << "currSB: " << currSBx << ", " << currSBy << ", " << currSBz << "\n";
-				//cerr << "LUF " << zFront * numSBy * numSBx + yUp   * numSBx + xLeft << " : " << "RUF " << zFront * numSBy * numSBx + yUp   * numSBx + xRight << " : "
-				//	 << "LDF " << zFront * numSBy * numSBx + yDown * numSBx + xLeft << " : " << "RDF " << zFront * numSBy * numSBx + yDown * numSBx + xRight<< endl;
-				//cerr << "LUB " << zBack  * numSBy * numSBx + yUp   * numSBx + xLeft << " : " << "RUB " << zBack  * numSBy * numSBx + yUp   * numSBx + xRight<< " : "
-				//	 << "LDB " << zBack  * numSBy * numSBx + yDown * numSBx + xLeft << " : " << "RDB " << zBack  * numSBy * numSBx + yDown * numSBx + xRight << endl;
+				L_Up_front = &mappedHist[numBins * (zFront * numSB.y * numSB.x + yUp * numSB.x + xLeft)];
+				R_Up_front = &mappedHist[numBins * (zFront * numSB.y * numSB.x + yUp * numSB.x + xRight)];
+				L_Dn_front = &mappedHist[numBins * (zFront * numSB.y * numSB.x + yDown * numSB.x + xLeft)];
+				R_Dn_front = &mappedHist[numBins * (zFront * numSB.y * numSB.x + yDown * numSB.x + xRight)];
 
-				L_Up_front = &mappedHist[numBins * (zFront * numSBy * numSBx + yUp * numSBx + xLeft)];
-				R_Up_front = &mappedHist[numBins * (zFront * numSBy * numSBx + yUp * numSBx + xRight)];
-				L_Dn_front = &mappedHist[numBins * (zFront * numSBy * numSBx + yDown * numSBx + xLeft)];
-				R_Dn_front = &mappedHist[numBins * (zFront * numSBy * numSBx + yDown * numSBx + xRight)];
-
-				L_Up_back = &mappedHist[numBins * (zBack * numSBy * numSBx + yUp * numSBx + xLeft)];
-				R_Up_back = &mappedHist[numBins * (zBack * numSBy * numSBx + yUp * numSBx + xRight)];
-				L_Dn_back = &mappedHist[numBins * (zBack * numSBy * numSBx + yDown * numSBx + xLeft)];
-				R_Dn_back = &mappedHist[numBins * (zBack * numSBy * numSBx + yDown * numSBx + xRight)];
+				L_Up_back = &mappedHist[numBins * (zBack * numSB.y * numSB.x + yUp * numSB.x + xLeft)];
+				R_Up_back = &mappedHist[numBins * (zBack * numSB.y * numSB.x + yUp * numSB.x + xRight)];
+				L_Dn_back = &mappedHist[numBins * (zBack * numSB.y * numSB.x + yDown * numSB.x + xLeft)];
+				R_Dn_back = &mappedHist[numBins * (zBack * numSB.y * numSB.x + yDown * numSB.x + xRight)];
 
 				lerp3D(volume, L_Up_front, R_Up_front, L_Dn_front, R_Dn_front, L_Up_back, R_Up_back, L_Dn_back, R_Dn_back,
-					sectionSizeX, sectionSizeY, sectionSizeZ, startX, startY, startZ, LUT, numBins, imageDimX, imageDimY);
+					sectionSizeX, sectionSizeY, sectionSizeZ, startX, startY, startZ, LUT, numBins, volDim.x, volDim.y);
 
 				// increment the index
 				startX = startX + sectionSizeX;
@@ -800,10 +775,6 @@ void CLAHE::clahe3D(uint16_t* volume, unsigned int imageDimX, unsigned int image
 	// clean up 
 	delete[] mappedHist;
 	delete[] LUT;
-
-	std::cerr << "fin\n";
-
-
 }
 
 
@@ -811,7 +782,7 @@ void CLAHE::clahe3D(uint16_t* volume, unsigned int imageDimX, unsigned int image
 ////////////////////////////////////////////////////////////////////////////////
 // Public 3D CLAHE Methods
 
-int CLAHE::CLAHE_3D(unsigned int numSBx, unsigned int numSBy, unsigned int numSBz, unsigned int numBins, float clipLimit) {
+int CLAHE::CLAHE_3D(glm::uvec3 numSB, unsigned int numBins, float clipLimit) {
 
 	std::cerr << "\n----- 3D CLAHE -----\n";
 
@@ -819,9 +790,9 @@ int CLAHE::CLAHE_3D(unsigned int numSBx, unsigned int numSBy, unsigned int numSB
 
 	// error checking 
 	//if (clipLimit == 1.0) return 0;				// return original image
-	if (numSBx > _maxNumCR_X) return 0;				// # of x SubBlocks too large
-	if (numSBy > _maxNumCR_Y) return 0;				// # of y SubBlocks too large
-	//if (numSBz > _maxNumCR_Z) return -3;			// # of z SubBlocks too large
+	if (numSB.x > _maxNumCR_X) return 0;				// # of x SubBlocks too large
+	if (numSB.y > _maxNumCR_Y) return 0;				// # of y SubBlocks too large
+	//if (numSB.z > _maxNumCR_Z) return -3;			// # of z SubBlocks too large
 	if (numBins == 0) numBins = NUM_IN_GRAY_VALS;	// default value when not specified
 
 	// get the data from the image 
@@ -829,46 +800,30 @@ int CLAHE::CLAHE_3D(unsigned int numSBx, unsigned int numSBy, unsigned int numSB
 	memcpy(volumeData, _imageData, sizeof(uint16_t) * _imgDimX * _imgDimY * _imgDimZ);
 
 	// perform CLAHE on that volume data 
-	clahe3D(volumeData, _imgDimX, _imgDimY, _imgDimZ, numSBx, numSBy, numSBz, numBins, clipLimit);
+	clahe3D(volumeData, glm::uvec3(_imgDimX, _imgDimY, _imgDimZ), numSB, numBins, clipLimit);
 
-	// re-distribute the pixels to the full range - for some reason values are being mapped to [0,4519] instead of [0,65535]... 
-	float max = 0.0f;
-	uint16_t* vol = volumeData;
-	for (unsigned int i = 0; i < _imgDimX * _imgDimY * _imgDimZ; i++) {
-		float value = vol[i];
-		if (value > max) {
-			max = value;
-		}
-	}
-	printf("CHECKING ... max: %f\n\n", max);
-
-	vol = volumeData;
-	for (unsigned int i = 0; i < _imgDimX * _imgDimY * _imgDimZ; i++) {
-		float value = vol[i];
-		value = (value / max) * (float)_maxVal;
-		vol[i] = (uint16_t)value;
-	}
 
 	// store the new data as a texture 
-	GLuint textureID = initTexture3D(_imgDimX, _imgDimY, _imgDimZ, GL_R16UI, GL_RED_INTEGER, GL_UNSIGNED_SHORT, GL_LINEAR, volumeData);
+	GLuint textureID = initTexture3D(_imgDimX, _imgDimY, _imgDimZ, GL_R16, GL_RED, GL_UNSIGNED_SHORT, GL_LINEAR, volumeData);
+	//GLuint textureID = initTexture3D(_imgDimX, _imgDimY, _imgDimZ, GL_R16UI, GL_RED_INTEGER, GL_UNSIGNED_SHORT, GL_LINEAR, volumeData);
+
 	std::cerr << "new TextureID: " << textureID << endl;
 
 	chrono::high_resolution_clock::time_point t2 = chrono::high_resolution_clock::now();
 	chrono::duration<double> time_span = chrono::duration_cast<chrono::duration<double>>(t2 - t1);
 
-	std::cerr << "3D CLAHE took: " << time_span.count() << " seconds.\n";
+	std::cerr << "\n3D CLAHE took: " << time_span.count() << " seconds.\n";
 
 	return textureID;
 }
 
-int CLAHE::Focused_CLAHE_3D(unsigned int xMin, unsigned int xMax, unsigned int yMin, unsigned int yMax, unsigned int zMin, unsigned int zMax,
-							unsigned int numBins, float clipLimit) {
+int CLAHE::Focused_CLAHE_3D(glm::uvec3 min, glm::uvec3 max, unsigned int numBins, float clipLimit) {
 
 	chrono::high_resolution_clock::time_point t1 = chrono::high_resolution_clock::now();
 
-	unsigned int xDim = (xMax - xMin);
-	unsigned int yDim = (yMax - yMin);
-	unsigned int zDim = (zMax - zMin);
+	unsigned int xDim = (max.x - min.x);
+	unsigned int yDim = (max.y - min.y);
+	unsigned int zDim = (max.z - min.z);
 
 	// get the data from the image 
 	uint16_t* volumeData = new uint16_t[_imgDimX * _imgDimY * _imgDimZ];
@@ -877,28 +832,28 @@ int CLAHE::Focused_CLAHE_3D(unsigned int xMin, unsigned int xMax, unsigned int y
 	// take out the section you want to enhance
 	uint16_t* subVolumeData = new uint16_t[xDim * yDim * zDim];
 	memset(subVolumeData, 0, sizeof(uint16_t) * xDim * yDim * zDim);
-	for (unsigned int zIndex = zMin, z = 0; zIndex < zMax; zIndex++, z++) {
-		for (unsigned int yIndex = yMin, y = 0; yIndex < yMax; yIndex++, y++) {
-			for (unsigned int xIndex = xMin, x = 0; xIndex < xMax; xIndex++, x++) {
+	for (unsigned int zIndex = min.z, z = 0; zIndex < max.z; zIndex++, z++) {
+		for (unsigned int yIndex = min.y, y = 0; yIndex < max.y; yIndex++, y++) {
+			for (unsigned int xIndex = min.x, x = 0; xIndex < max.x; xIndex++, x++) {
 				subVolumeData[z * xDim * yDim + y * xDim + x] = volumeData[zIndex * _imgDimX * _imgDimY + yIndex * _imgDimX + xIndex];
 			}
 		}
 	}
 
 	// Determine the number of SB
-	unsigned int numSBx = max((int)(xDim / 100), 1);
-	unsigned int numSBy = max((int)(yDim / 100), 1);
-	unsigned int numSBz = max((int)(zDim / 100), 1);
+	unsigned int numSBx = std::max((int)(xDim / 100), 1);
+	unsigned int numSBy = std::max((int)(yDim / 100), 1);
+	unsigned int numSBz = std::max((int)(zDim / 100), 1);
 
 	// perform CLAHE on the selected region
 	printf("\n----- Focused 3D CLAHE -----\n");
-	printf("x range: [%d, %d], y range: [%d, %d], z range: [%d, %d]\n", xMin, xMax, yMin, yMax, zMin, zMax);
-	clahe3D(subVolumeData, xDim, yDim, zDim, numSBx, numSBy, numSBz, numBins, clipLimit);
+	printf("x range: [%d, %d], y range: [%d, %d], z range: [%d, %d]\n", min.x, max.x, min.y, max.y, min.z, max.z);
+	clahe3D(subVolumeData, glm::uvec3(xDim, yDim, zDim), glm::uvec3(numSBx, numSBy, numSBz), numBins, clipLimit);
 
 	// put the section back into the volume
-	for (unsigned int zIndex = zMin, z = 0; zIndex < zMax; zIndex++, z++) {
-		for (unsigned int yIndex = yMin, y = 0; yIndex < yMax; yIndex++, y++) {
-			for (unsigned int xIndex = xMin, x = 0; xIndex < xMax; xIndex++, x++) {
+	for (unsigned int zIndex = min.z, z = 0; zIndex < max.z; zIndex++, z++) {
+		for (unsigned int yIndex = min.y, y = 0; yIndex < max.y; yIndex++, y++) {
+			for (unsigned int xIndex = min.x, x = 0; xIndex < max.x; xIndex++, x++) {
 				volumeData[zIndex * _imgDimX * _imgDimY + yIndex * _imgDimX + xIndex] = subVolumeData[z * xDim * yDim + y * xDim + x];
 			}
 		}
@@ -908,7 +863,7 @@ int CLAHE::Focused_CLAHE_3D(unsigned int xMin, unsigned int xMax, unsigned int y
 	chrono::high_resolution_clock::time_point t2 = chrono::high_resolution_clock::now();
 	chrono::duration<double> time_span = chrono::duration_cast<chrono::duration<double>>(t2 - t1);
 
-	std::cerr << "focused 3D CLAHE took: " << time_span.count() << " seconds.\n";
+	std::cerr << "\nFocused 3D CLAHE took: " << time_span.count() << " seconds.\n";
 
 	return initTexture3D(_imgDimX, _imgDimY, _imgDimZ, GL_R16, GL_RED, GL_UNSIGNED_SHORT, GL_LINEAR, volumeData);
 	//return initTexture3D(xDim, yDim, zDim, GL_R16, GL_RED, GL_UNSIGNED_SHORT, GL_LINEAR, subVolumeData);
