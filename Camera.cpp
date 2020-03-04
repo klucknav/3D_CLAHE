@@ -51,7 +51,7 @@ void Camera::Reset() {
 	_nearPlane = 0.1f;
 	_farPlane = 100.0f;
 	
-	_distance = 10.0f;
+	_distance = 2.5f;
 	_azimuth = 0.0f;
 	_incline = 20.0f;
 }

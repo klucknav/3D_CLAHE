@@ -6,7 +6,7 @@
 #include "Shader.h"
 #include "ImageLoader.h"
 #include "CLAHE.h"
-#include "CLAHEshader.h"
+#include "ComputeCLAHE.h"
 
 #include <stdio.h>
 #include <chrono>
@@ -139,12 +139,10 @@ void SceneManager::InitScene() {
 	std::string folderPath = std::string("C:/Users/kroth/Documents/UCSD/Grad/Thesis/clahe_2/Larry");
 	ImageLoader* _dicomVolume = new ImageLoader(folderPath, false);
 	glm::vec3 volDim = _dicomVolume->GetImageDimensions();
-	printf("Volume Dimensions:  ");
-	printVec(volDim);
 	_dicomVolumeTexture = _dicomVolume->GetTextureID();
 
 	// 3D CLAHE
-	/*CLAHE* _volumeTest = new CLAHE(_dicomVolume);
+	CLAHE* _volumeTest = new CLAHE(_dicomVolume);
 	
 	//unsigned int numCRx = 2, numCRy = 2,  numCRz = 1;
 	unsigned int numCRx = 4, numCRy = 4,  numCRz = 2;
@@ -156,25 +154,21 @@ void SceneManager::InitScene() {
 	unsigned int xMin = 200, xMax = 400;
 	unsigned int yMin = 200, yMax = 400;
 	unsigned int zMin = 50,  zMax = 100;
-	_focusedDicomVolumeTexture = _volumeTest->Focused_CLAHE_3D(xMin, xMax, yMin, yMax, zMin, zMax, numGrayValsFinal, clipLimit);*/
+	_focusedDicomVolumeTexture = _volumeTest->Focused_CLAHE_3D(xMin, xMax, yMin, yMax, zMin, zMax, numGrayValsFinal, clipLimit);
 
 	////////////////////////////////////////////////////////////////////////////
 	// Using Compute Shaders
 
-	chrono::high_resolution_clock::time_point t1 = chrono::high_resolution_clock::now();
-	unsigned int numFinalGrayVals = 65536;
-	CLAHEshader comp = CLAHEshader(_dicomVolumeTexture, volDim, numFinalGrayVals, numFinalGrayVals);
-	comp.ComputeMinMax();
-	comp.ComputeLUT();
-	comp.ComputeHist();
-	comp.ComputeClipHist();
-	comp.ComputeLerp();
-	_claheDicomVolumeTexture = comp.GetNewTexture();
+	//chrono::high_resolution_clock::time_point t1 = chrono::high_resolution_clock::now();
 
-	chrono::high_resolution_clock::time_point t2 = chrono::high_resolution_clock::now();
-	chrono::duration<double> time_span = chrono::duration_cast<chrono::duration<double>>(t2 - t1);
+	//unsigned int numFinalGrayVals = 65536;
+	//ComputeCLAHE comp = ComputeCLAHE(_dicomVolumeTexture, volDim, numFinalGrayVals, numFinalGrayVals);
+	//_claheDicomVolumeTexture = comp.Compute3D_CLAHE(glm::uvec3(4,4,2));
+	//_focusedDicomVolumeTexture = comp.ComputeFocused3D_CLAHE(glm::uvec3(200, 200, 50), glm::uvec3(400, 400, 100));
 
-	std::cerr << "3D CLAHE with Compute Shaders took: " << time_span.count() << " seconds.\n";
+	//chrono::high_resolution_clock::time_point t2 = chrono::high_resolution_clock::now();
+	//chrono::duration<double> time_span = chrono::duration_cast<chrono::duration<double>>(t2 - t1);
+	//std::cerr << "3D CLAHE with Compute Shaders took: " << time_span.count() << " seconds.\n";
 
 
 	////////////////////////////////////////////////////////////////////////////
@@ -221,8 +215,10 @@ void SceneManager::ClearScene() {
 
 	delete _camera;
 	delete _dicomCube;
+
+	// ImageLoaders
 	delete _dicomImage;
-	//delete _dicomVolume;
+	delete _dicomVolume;
 
 	glfwDestroyWindow(_window);
 }

@@ -1,18 +1,23 @@
 ////////////////////////////////////////
-// CLAHEshader.cpp
+// ComputeCLAHE.cpp
 ////////////////////////////////////////
 
-#include "CLAHEshader.h"
+#include "ComputeCLAHE.h"
 #include "Shader.h"
 
 #include <thread>
+#include <algorithm>
+#include <chrono>
+
+using namespace std;
 
 void mapHistogram(uint32_t minVal, uint32_t maxVal, uint32_t numPixelsSB, uint32_t numBins, uint32_t* localHist);
+void clipHistogramPass2(uint32_t excess, uint32_t clipValue, uint32_t numPixelsSB, uint32_t numBins, uint32_t* localHist);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Constructors/Destructors
 
-CLAHEshader::CLAHEshader(GLuint volumeTexture, glm::vec3 volDims, unsigned int finalGrayVals, unsigned int inGrayVals) {
+ComputeCLAHE::ComputeCLAHE(GLuint volumeTexture, glm::vec3 volDims, unsigned int finalGrayVals, unsigned int inGrayVals) {
 	
 	// Load Shaders 
 	_minMaxShader = LoadComputeShader("minMax.comp");
@@ -34,7 +39,7 @@ CLAHEshader::CLAHEshader(GLuint volumeTexture, glm::vec3 volDims, unsigned int f
 	_globalMinMax[1] = 0;
 }
 
-CLAHEshader::~CLAHEshader() {
+ComputeCLAHE::~ComputeCLAHE() {
 	glDeleteProgram(_minMaxShader);
 	glDeleteProgram(_LUTshader);
 	glDeleteProgram(_histShader);
@@ -47,7 +52,71 @@ CLAHEshader::~CLAHEshader() {
 ////////////////////////////////////////////////////////////////////////////////
 // Compute Shader Functions
 
-void CLAHEshader::ComputeMinMax() {
+GLuint ComputeCLAHE::Compute3D_CLAHE(glm::uvec3 numSB) {
+
+	printf("\n----- Compute 3D CLAHE -----\n");
+	printf("using (%u, %u, %u) subBlocks\n", numSB.x, numSB.y, numSB.z);
+
+	chrono::high_resolution_clock::time_point t1 = chrono::high_resolution_clock::now();
+
+	// set the number of SubBlocks:
+	_numSB = numSB;
+
+	// set up
+	ComputeMinMax();
+	ComputeLUT();
+
+	// Hist
+	ComputeHist();
+	ComputeClipHist();
+
+	// Lerp
+	ComputeLerp();
+
+	chrono::high_resolution_clock::time_point t2 = chrono::high_resolution_clock::now();
+	chrono::duration<double> time_span = chrono::duration_cast<chrono::duration<double>>(t2 - t1);
+
+	printf("3D CLAHE took: %f seconds\n\n", time_span.count());
+
+	return _newVolumeTexture;
+}
+
+GLuint ComputeCLAHE::ComputeFocused3D_CLAHE(glm::uvec3 min, glm::uvec3 max) {
+
+	printf("\n----- Compute focused 3D CLAHE -----\n");
+	printf("x range: [%d, %d], y range: [%d, %d], z range: [%d, %d]\n", min.x, max.x, min.y, max.y, min.z, max.z);
+
+	glm::ivec3 focusedDim = max - min;
+
+	// Determine the number of SB
+	unsigned int numSBx = std::max((focusedDim.x / 100), 1);
+	unsigned int numSBy = std::max((focusedDim.y / 100), 1);
+	unsigned int numSBz = std::max((focusedDim.z / 100), 1);
+	glm::uvec3 numSB = glm::uvec3(numSBx, numSBy, numSBz);
+	printf("using (%u, %u, %u) subBlocks\n", numSB.x, numSB.y, numSB.z);
+
+	// set the number of SubBlocks:
+	_numSB = numSB;
+
+	// take out the section of data and create a texture with it
+
+	// set up
+	//ComputeMinMax();
+	//ComputeLUT();
+
+	//// Hist
+	//ComputeHist();
+	//ComputeClipHist();
+
+	//// Lerp
+	//ComputeLerp();
+
+	// put data back into one texture 
+
+	return _newVolumeTexture;
+}
+
+void ComputeCLAHE::ComputeMinMax() {
 
 	printf("LUT...");
 	// buffer to store the min/max
@@ -81,7 +150,7 @@ void CLAHEshader::ComputeMinMax() {
 	glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_CLIENT_MAPPED_BUFFER_BARRIER_BIT);
 }
 
-void CLAHEshader::ComputeLUT() {
+void ComputeCLAHE::ComputeLUT() {
 
 	// buffer to store the LUT
 	glGenBuffers(1, &_LUTbuffer);
@@ -102,7 +171,7 @@ void CLAHEshader::ComputeLUT() {
 
 }
 
-void CLAHEshader::ComputeHist() {
+void ComputeCLAHE::ComputeHist() {
 
 	printf("\nCompute Hist...");
 
@@ -141,7 +210,7 @@ void CLAHEshader::ComputeHist() {
 	glUseProgram(0);
 }
 
-void CLAHEshader::ComputeClipHist() {
+void ComputeCLAHE::ComputeClipHist() {
 
 	std::cerr << "\nexcess ... ";
 	////////////////////////////////////////////////////////////////////////////
@@ -285,7 +354,7 @@ void CLAHEshader::ComputeClipHist() {
 
 }
 
-void CLAHEshader::ComputeLerp() {
+void ComputeCLAHE::ComputeLerp() {
 
 	printf("lerp...");
 
@@ -351,6 +420,28 @@ void mapHistogram(uint32_t minVal, uint32_t maxVal, uint32_t numPixelsSB, uint32
 		//cerr << "Val: " << val << " sum: " << sum << endl;
 		localHist[i] = (unsigned int)(std::min(minVal + sum * scale, (float)maxVal));
 	}
+}
+
+// multi-thread the second pass of redistributing the excess in each histogram
+void clipHistogramPass2(uint32_t excess, uint32_t clipValue, uint32_t numPixelsSB, uint32_t numBins, uint32_t* localHist) {
+
+	unsigned int* hist = localHist;
+	while (excess > 0) {
+
+		// based on the current amount of excess calculate the step size (must be at least 1)
+		unsigned int stepSize = std::max(1u, (numBins / excess));
+
+		// cycle through the histogram and distribute the excess
+		for (unsigned int index = 0; index < numBins && excess > 0; index += stepSize) {
+
+			// only add to the histogram if the value is not past the clipValue
+			if (hist[index] < clipValue) {
+				hist[index]++;
+				excess--;
+			}
+		}
+	}
+
 }
 
 ////////////////////////////////////////////////////////////////////////////////

@@ -1,12 +1,13 @@
 ////////////////////////////////////////
-// CLAHEshader.h
+// ComputeCLAHE.h
+// Compute CLAHE using Compute Shaders and multi-threading
 ////////////////////////////////////////
 
 #pragma once
 
 #include "core.h"
 
-class CLAHEshader {
+class ComputeCLAHE {
 private:
 
 	// compute shaders
@@ -34,11 +35,12 @@ private:
 	GLuint _histMaxBuffer, _excessBuffer;
 	GLuint _layer = 1;
 
-	//void mapHistogram();
-
 public:
-	CLAHEshader(GLuint volumeTexture, glm::vec3 volDims, unsigned int numFinalGrayVals, unsigned int numInGrayVals);
-	~CLAHEshader();
+	ComputeCLAHE(GLuint volumeTexture, glm::vec3 volDims, unsigned int numFinalGrayVals, unsigned int numInGrayVals);
+	~ComputeCLAHE();
+
+	GLuint Compute3D_CLAHE(glm::uvec3 numSB);
+	GLuint ComputeFocused3D_CLAHE(glm::uvec3 min, glm::uvec3 max);
 
 	void ComputeMinMax();
 	void ComputeLUT();
