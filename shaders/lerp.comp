@@ -25,7 +25,8 @@ layout(r16f, binding = 3) uniform image3D newVolume;
 
 uniform ivec3 numSB;	// number of Sub Blocks
 uniform uint NUM_BINS;	// number of gray values in the Volume 
-bool useLUT = false;	// if we need to use the LUT to map to a different bit range
+uniform bool useLUT;	// if we need to use the LUT to map to a different bit range
+uniform uvec3 offset;	// start of the region to apply CLAHE to
 
 
 void main() {
@@ -140,7 +141,7 @@ void main() {
 	// LERP
 
 	// get the current gray value 
-	uint greyValue = imageLoad(volume, ivec3(index)).x;
+	uint greyValue = imageLoad(volume, ivec3(index + offset)).x;
 	if (useLUT) {
 		greyValue = LUT [ greyValue ];
 	}
@@ -160,5 +161,5 @@ void main() {
 	float ans = (cInv * front + c * back) / normFactor;
 
 	// store new value back into the volume texture 
-	imageStore(newVolume, ivec3(index), vec4(ans, 0, 0, 0));
+	imageStore(newVolume, ivec3(index + offset), vec4(ans, 0, 0, 0));
 }

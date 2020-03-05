@@ -26,7 +26,8 @@ layout(std430, binding = 3) buffer outHistMax {
 
 uniform ivec3 numSB;	// number of Sub Blocks
 uniform uint NUM_BINS;	// number of gray values in the Volume 
-bool useLUT = false;	// if we need to use the LUT to map to a different bit range
+uniform uvec3 offset;	// start of the region to apply CLAHE to
+uniform bool useLUT;	// if we need to use the LUT to map to a different bit range
 
 void main() {
 
@@ -37,7 +38,7 @@ void main() {
 	ivec3 currSB = ivec3( index / sizeSB );
 	
 	// get the gray value of the Volume
-	uint volSample = imageLoad( volume, ivec3(index) ).x;
+	uint volSample = imageLoad( volume, ivec3(index + offset) ).x;
 	uint histIndex = (currSB.z * numSB.x * numSB.y + currSB.y * numSB.x + currSB.x);
 	
 	// Increment the appropriate histogram

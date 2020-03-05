@@ -26,6 +26,7 @@ ComputeCLAHE::ComputeCLAHE(GLuint volumeTexture, glm::vec3 volDims, unsigned int
 	_clipShader1 = LoadComputeShader("clipHist.comp");
 	_clipShader2 = LoadComputeShader("clipHist_p2.comp");
 	_lerpShader = LoadComputeShader("lerp.comp");
+	_focusedLerpShader = LoadComputeShader("lerp_focused.comp");
 
 	// Volume Data 
 	_volumeTexture = volumeTexture;
@@ -33,9 +34,13 @@ ComputeCLAHE::ComputeCLAHE(GLuint volumeTexture, glm::vec3 volDims, unsigned int
 	_numFinalGrayVals = finalGrayVals;
 	_numInGrayVals = inGrayVals;
 
-	// Data used in the compute shaders 
+	// Data used in the computePass2 shaders 
 	_globalMinMax[0] = _numFinalGrayVals;
 	_globalMinMax[1] = 0;
+
+	// if the number of gray values is changing --> use the LUT
+	_useLUT = (_numFinalGrayVals != _numInGrayVals);
+	printf("useLUT: %s\n", _useLUT ? "true" : "false");
 }
 
 ComputeCLAHE::~ComputeCLAHE() {
@@ -49,7 +54,7 @@ ComputeCLAHE::~ComputeCLAHE() {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-// Compute Shader Functions
+// CLAHE Functions
 
 GLuint ComputeCLAHE::Compute3D_CLAHE(glm::uvec3 numSB) {
 
@@ -58,32 +63,30 @@ GLuint ComputeCLAHE::Compute3D_CLAHE(glm::uvec3 numSB) {
 
 	chrono::high_resolution_clock::time_point t1 = chrono::high_resolution_clock::now();
 
-	// set the number of SubBlocks:
-	_numSB = numSB;
-
 	// set up
-	ComputeMinMax();
-	ComputeLUT();
+	computeMinMax(_volDims);
+	computeLUT();
 
 	// Hist
-	ComputeHist();
-	ComputeClipHist();
+	computeHist(_volDims, numSB);
+	computeClipHist(_volDims, numSB);
 
 	// Lerp
-	ComputeLerp();
+	GLuint newTexture = computeLerp(_volDims, numSB);
 
 	chrono::high_resolution_clock::time_point t2 = chrono::high_resolution_clock::now();
 	chrono::duration<double> time_span = chrono::duration_cast<chrono::duration<double>>(t2 - t1);
-
 	printf("3D CLAHE took: %f seconds\n\n", time_span.count());
 
-	return _newVolumeTexture;
+	return newTexture;
 }
 
 GLuint ComputeCLAHE::ComputeFocused3D_CLAHE(glm::uvec3 min, glm::uvec3 max) {
 
 	printf("\n----- Compute focused 3D CLAHE -----\n");
 	printf("x range: [%d, %d], y range: [%d, %d], z range: [%d, %d]\n", min.x, max.x, min.y, max.y, min.z, max.z);
+
+	chrono::high_resolution_clock::time_point t1 = chrono::high_resolution_clock::now();
 
 	glm::ivec3 focusedDim = max - min;
 
@@ -94,28 +97,30 @@ GLuint ComputeCLAHE::ComputeFocused3D_CLAHE(glm::uvec3 min, glm::uvec3 max) {
 	glm::uvec3 numSB = glm::uvec3(numSBx, numSBy, numSBz);
 	printf("using (%u, %u, %u) subBlocks\n", numSB.x, numSB.y, numSB.z);
 
-	// set the number of SubBlocks:
-	_numSB = numSB;
-
 	// take out the section of data and create a texture with it
 
 	// set up
-	//ComputeMinMax();
-	//ComputeLUT();
+	computeMinMax(focusedDim, min);
+	computeLUT();
 
-	//// Hist
-	//ComputeHist();
-	//ComputeClipHist();
+	// Hist
+	computeHist(focusedDim, numSB, min);
+	computeClipHist(focusedDim, numSB);
 
-	//// Lerp
-	//ComputeLerp();
+	// Lerp
+	GLuint newTexture = computeFocusedLerp(focusedDim, numSB, min, max);
 
-	// put data back into one texture 
+	chrono::high_resolution_clock::time_point t2 = chrono::high_resolution_clock::now();
+	chrono::duration<double> time_span = chrono::duration_cast<chrono::duration<double>>(t2 - t1);
+	printf("Focused 3D CLAHE took: %f seconds\n\n", time_span.count());
 
-	return _newVolumeTexture;
+	return newTexture;
 }
 
-void ComputeCLAHE::ComputeMinMax() {
+////////////////////////////////////////////////////////////////////////////////
+// CLAHE Compute Shader Functions
+
+void ComputeCLAHE::computeMinMax(glm::uvec3 volDims, glm::uvec3 offset) {
 
 	printf("LUT...");
 	// buffer to store the min/max
@@ -129,10 +134,11 @@ void ComputeCLAHE::ComputeMinMax() {
 	glBindImageTexture(0, _volumeTexture, 0, GL_TRUE, _layer, GL_READ_ONLY, GL_R16UI);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, _globalMinMaxBuffer);
 	glUniform1ui(glGetUniformLocation(_minMaxShader, "NUM_BINS"), _numInGrayVals);
+	glUniform3ui(glGetUniformLocation(_minMaxShader, "offset"), offset.x, offset.y, offset.z);
 
-	glDispatchCompute(	(GLuint)((_volDims.x + 3) / 4),
-						(GLuint)((_volDims.y + 3) / 4),
-						(GLuint)((_volDims.z + 3) / 4));
+	glDispatchCompute(	(GLuint)((volDims.x + 3) / 4),
+						(GLuint)((volDims.y + 3) / 4),
+						(GLuint)((volDims.z + 3) / 4));
 	// make sure writting to the image is finished before reading 
 	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
 	glUseProgram(0);
@@ -149,7 +155,7 @@ void ComputeCLAHE::ComputeMinMax() {
 	glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_CLIENT_MAPPED_BUFFER_BARRIER_BIT);
 }
 
-void ComputeCLAHE::ComputeLUT() {
+void ComputeCLAHE::computeLUT() {
 
 	// buffer to store the LUT
 	glGenBuffers(1, &_LUTbuffer);
@@ -170,12 +176,12 @@ void ComputeCLAHE::ComputeLUT() {
 
 }
 
-void ComputeCLAHE::ComputeHist() {
+void ComputeCLAHE::computeHist(glm::uvec3 volDims, glm::uvec3 numSB, glm::uvec3 offset) {
 
 	printf("\nCompute Hist...");
 
 	// Buffer to store the Histograms
-	uint32_t histSize = _numFinalGrayVals * _numSB.x * _numSB.y * _numSB.z;
+	uint32_t histSize = _numFinalGrayVals * numSB.x * numSB.y * numSB.z;
 	glGenBuffers(1, &_histBuffer);
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, _histBuffer);
 	glBufferData(GL_SHADER_STORAGE_BUFFER, histSize * sizeof(uint32_t), nullptr, GL_STREAM_READ);
@@ -183,7 +189,7 @@ void ComputeCLAHE::ComputeHist() {
 
 
 	glGenBuffers(1, &_histMaxBuffer);
-	uint32_t maxValSize = _numSB.x * _numSB.y * _numSB.z;
+	uint32_t maxValSize = numSB.x * numSB.y * numSB.z;
 	uint32_t* _histMax = new uint32_t[maxValSize];
 	memset(_histMax, 0, maxValSize * sizeof(uint32_t));
 
@@ -197,28 +203,30 @@ void ComputeCLAHE::ComputeHist() {
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, _LUTbuffer);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, _histBuffer);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, _histMaxBuffer);
-	glUniform3i(glGetUniformLocation(_histShader, "numSB"), _numSB.x, _numSB.y, _numSB.z);	
+	glUniform3i(glGetUniformLocation(_histShader, "numSB"), numSB.x, numSB.y, numSB.z);	
 	glUniform1ui(glGetUniformLocation(_histShader, "NUM_BINS"), _numInGrayVals);
+	glUniform3ui(glGetUniformLocation(_histShader, "offset"), offset.x, offset.y, offset.z);
+	glUniform1i(glGetUniformLocation(_histShader, "useLUT"), _useLUT);
 
-	glDispatchCompute(	(GLuint)((_volDims.x + 3) / 4),
-						(GLuint)((_volDims.y + 3) / 4),
-						(GLuint)((_volDims.z + 3) / 4));
+	glDispatchCompute(	(GLuint)((volDims.x + 3) / 4),
+						(GLuint)((volDims.y + 3) / 4),
+						(GLuint)((volDims.z + 3) / 4));
 
 	// make sure writting to the image is finished before reading 
 	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
 	glUseProgram(0);
 }
 
-void ComputeCLAHE::ComputeClipHist() {
+void ComputeCLAHE::computeClipHist(glm::uvec3 volDims, glm::uvec3 numSB) {
 
 	std::cerr << "\nexcess ... ";
 	////////////////////////////////////////////////////////////////////////////
 	// Calculate the excess pixels based on the clipLimit
 
-	uint32_t histSize = _numFinalGrayVals * _numSB.x * _numSB.y * _numSB.z;
+	uint32_t histSize = _numFinalGrayVals * numSB.x * numSB.y * numSB.z;
 
 	// buffer for the pixels to re-distribute
-	uint32_t excessSize = _numSB.x * _numSB.y * _numSB.z;
+	uint32_t excessSize = numSB.x * numSB.y * numSB.z;
 	uint32_t* excess = new uint32_t[excessSize];
 	memset(excess, 0, excessSize * sizeof(uint32_t));
 
@@ -265,43 +273,53 @@ void ComputeCLAHE::ComputeClipHist() {
 	// - redistribute the remaining excess pixels throughout the image
 	std::cerr << "clip Hist 2... ";
 
+	// compute stepSize for the second pass of redistributing the excess pixels
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, _excessBuffer);
 	excess = (uint32_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
 	uint32_t* stepSize = new uint32_t[excessSize];
 	memset(stepSize, 0, excessSize * sizeof(uint32_t));
+	bool computePass2 = false;
 	for (unsigned int i = 0; i < excessSize; i++) {
-		stepSize[i] = std::max(_numInGrayVals / excess[i], 1u);
+		if (excess[i] == 0) {
+			stepSize[i] = 0;
+		}
+		else {
+			stepSize[i] = std::max(_numInGrayVals / excess[i], 1u);
+			computePass2 = true;
+		}
 	}
 	glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
 	glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_CLIENT_MAPPED_BUFFER_BARRIER_BIT);
 
-	GLuint stepSizeBuffer;
-	glGenBuffers(1, &stepSizeBuffer);
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, stepSizeBuffer);
-	glBufferData(GL_SHADER_STORAGE_BUFFER, excessSize * sizeof(uint32_t), stepSize, GL_STREAM_READ);
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+	if (computePass2) {
+		GLuint stepSizeBuffer;
+		glGenBuffers(1, &stepSizeBuffer);
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, stepSizeBuffer);
+		glBufferData(GL_SHADER_STORAGE_BUFFER, excessSize * sizeof(uint32_t), stepSize, GL_STREAM_READ);
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 
 
-	glUseProgram(_clipShader2);
-	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, _histBuffer);
-	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, _histMaxBuffer);
-	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, _excessBuffer);
-	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, stepSizeBuffer);
-	glUniform1ui(glGetUniformLocation(_clipShader2, "NUM_BINS"), _numInGrayVals);
-	glUniform1f(glGetUniformLocation(_excessShader, "clipLimit"), _clipLimit);
+		glUseProgram(_clipShader2);
+		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, _histBuffer);
+		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, _histMaxBuffer);
+		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, _excessBuffer);
+		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, stepSizeBuffer);
+		glUniform1ui(glGetUniformLocation(_clipShader2, "NUM_BINS"), _numInGrayVals);
+		glUniform1f(glGetUniformLocation(_excessShader, "clipLimit"), _clipLimit);
 
 
-	glDispatchCompute((GLuint)((histSize + 63) / 64), 1, 1);
+		glDispatchCompute((GLuint)((histSize + 63) / 64), 1, 1);
 
-	// make sure writting to the image is finished before reading 
-	glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-	glUseProgram(0);
+		// make sure writting to the image is finished before reading 
+		glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+		glUseProgram(0);
+	}
 
 
 	////////////////////////////////////////////////////////////////////////////
 	// Map the histograms 
 	// - calculate the CDF for each of the histograms and store it in hist
-	glm::vec3 sizeSB = _volDims / _numSB;
+	glm::vec3 sizeSB = volDims / numSB;
 	unsigned int numPixelsSB = sizeSB.x * sizeSB.y * sizeSB.z;
 
 	std::vector<std::thread> threads;
@@ -322,18 +340,18 @@ void ComputeCLAHE::ComputeClipHist() {
 	glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
 	glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_CLIENT_MAPPED_BUFFER_BARRIER_BIT);
 
-
-	std::cerr << "\n";
-
+	delete[] stepSize;
+	printf("\n");
 }
 
-void ComputeCLAHE::ComputeLerp() {
+GLuint ComputeCLAHE::computeLerp(glm::uvec3 volDims, glm::uvec3 numSB, glm::uvec3 offset) {
 
 	printf("lerp...");
 
 	// generate the new volume texture
-	glGenTextures(1, &_newVolumeTexture);
-	glBindTexture(GL_TEXTURE_3D, _newVolumeTexture);
+	GLuint newVolumeTexture;
+	glGenTextures(1, &newVolumeTexture);
+	glBindTexture(GL_TEXTURE_3D, newVolumeTexture);
 	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_REPEAT);
 	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_REPEAT);
@@ -348,9 +366,52 @@ void ComputeCLAHE::ComputeLerp() {
 	glBindImageTexture(0, _volumeTexture, 0, GL_TRUE, _layer, GL_READ_ONLY, GL_R16UI);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, _LUTbuffer);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, _histBuffer);
-	glBindImageTexture(3, _newVolumeTexture, 0, GL_TRUE, _layer, GL_WRITE_ONLY, GL_R16F);
-	glUniform3i(glGetUniformLocation(_lerpShader, "numSB"), _numSB.x, _numSB.y, _numSB.z);
+	glBindImageTexture(3, newVolumeTexture, 0, GL_TRUE, _layer, GL_WRITE_ONLY, GL_R16F);
+	glUniform3i(glGetUniformLocation(_lerpShader, "numSB"), numSB.x, numSB.y, numSB.z);
 	glUniform1ui(glGetUniformLocation(_lerpShader, "NUM_BINS"), _numInGrayVals);
+	glUniform3ui(glGetUniformLocation(_lerpShader, "offset"), offset.x, offset.y, offset.z);
+	glUniform1i(glGetUniformLocation(_lerpShader, "useLUT"), _useLUT);
+
+	glDispatchCompute(	(GLuint)((volDims.x + 3) / 4),
+						(GLuint)((volDims.y + 3) / 4),
+						(GLuint)((volDims.z + 3) / 4));
+
+	// make sure writting to the image is finished before reading 
+	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
+	glUseProgram(0);
+
+	printf("...\n");
+	return newVolumeTexture;
+}
+
+GLuint ComputeCLAHE::computeFocusedLerp(glm::uvec3 volDims, glm::uvec3 numSB, glm::uvec3 minVal, glm::vec3 maxVal) {
+
+	printf("lerp...");
+
+	// generate the new volume texture
+	GLuint newVolumeTexture;
+	glGenTextures(1, &newVolumeTexture);
+	glBindTexture(GL_TEXTURE_3D, newVolumeTexture);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexStorage3D(GL_TEXTURE_3D, 1, GL_R16F, _volDims.x, _volDims.y, _volDims.z);
+	glBindTexture(GL_TEXTURE_3D, 0);
+
+
+	// Set up Compute Shader 
+	glUseProgram(_focusedLerpShader);
+	glBindImageTexture(0, _volumeTexture, 0, GL_TRUE, _layer, GL_READ_ONLY, GL_R16UI);
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, _LUTbuffer);
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, _histBuffer);
+	glBindImageTexture(3, newVolumeTexture, 0, GL_TRUE, _layer, GL_WRITE_ONLY, GL_R16F);
+	glUniform3i(glGetUniformLocation(_focusedLerpShader, "numSB"), numSB.x, numSB.y, numSB.z);
+	glUniform1ui(glGetUniformLocation(_focusedLerpShader, "NUM_BINS"), _numInGrayVals);
+	glUniform3ui(glGetUniformLocation(_focusedLerpShader, "minVal"), minVal.x, minVal.y, minVal.z);
+	glUniform3ui(glGetUniformLocation(_focusedLerpShader, "maxVal"), maxVal.x, maxVal.y, maxVal.z);
+	glUniform1i(glGetUniformLocation(_focusedLerpShader, "useLUT"), _useLUT);
 
 	glDispatchCompute(	(GLuint)((_volDims.x + 3) / 4),
 						(GLuint)((_volDims.y + 3) / 4),
@@ -361,6 +422,7 @@ void ComputeCLAHE::ComputeLerp() {
 	glUseProgram(0);
 
 	printf("...\n");
+	return newVolumeTexture;
 }
 
 ////////////////////////////////////////////////////////////////////////////////

@@ -30,11 +30,13 @@ Cube* SceneManager::_dicomCube;
 GLuint SceneManager::_dicomVolumeTexture;
 GLuint SceneManager::_claheDicomVolumeTexture;
 GLuint SceneManager::_focusedDicomVolumeTexture;
+GLuint _test_focused_volume;
 
 enum class TextureMode {
 	_RAW,
 	_CLAHE,
-	_FOCUSED
+	_FOCUSED, 
+	_TEST
 };
 TextureMode _textureMode;
 
@@ -149,53 +151,23 @@ void SceneManager::InitScene() {
 	CLAHE* _volumeTest = new CLAHE(_dicomVolume);
 
 	// Regular 3D CLAHE
-	_claheDicomVolumeTexture = _volumeTest->CLAHE_3D(numSB, numGrayValsFinal3D, clipLimit3D);
+	//_claheDicomVolumeTexture = _volumeTest->CLAHE_3D(numSB, numGrayValsFinal3D, clipLimit3D);
 	
 	// Focused 3D CLAHE
 	glm::uvec3 min3D = glm::uvec3(200, 200, 50);
 	glm::uvec3 max3D = glm::uvec3(400, 400, 100);
-	_focusedDicomVolumeTexture = _volumeTest->Focused_CLAHE_3D(min3D, max3D, numGrayValsFinal3D, clipLimit3D);
+	//_focusedDicomVolumeTexture = _volumeTest->Focused_CLAHE_3D(min3D, max3D, numGrayValsFinal3D, clipLimit3D);
+	_test_focused_volume = _volumeTest->Focused_CLAHE_3D(min3D, max3D, numGrayValsFinal3D, clipLimit3D);
 
 	////////////////////////////////////////////////////////////////////////////
 	// Using Compute Shaders
 
 	unsigned int numFinalGrayVals = 65536;
 	ComputeCLAHE comp = ComputeCLAHE(_dicomVolumeTexture, volDim, numFinalGrayVals, numFinalGrayVals);
-	_focusedDicomVolumeTexture = comp.Compute3D_CLAHE(numSB);
-	//_claheDicomVolumeTexture = comp.Compute3D_CLAHE(numSB);
-	//_focusedDicomVolumeTexture = comp.ComputeFocused3D_CLAHE(min3D, max3D);
+	_claheDicomVolumeTexture = comp.Compute3D_CLAHE(numSB);
+	_focusedDicomVolumeTexture = comp.ComputeFocused3D_CLAHE(min3D, max3D);
 	
 
-	////////////////////////////////////////////////////////////////////////////
-	// Fake Data for Testing
-	/*int w = 8;
-	int h = 8;
-	int d = 1;
-	glm::vec3 fakeDims = glm::vec3(w, h, d);
-	int fakeSize = w * h * d;
-	uint16_t* fakeImage = new uint16_t[fakeSize];
-	//cerr << "fakeImage: \n";
-	for (int i = 0; i < fakeSize; i++) {
-		fakeImage[i] = i;
-		//cerr << "(" << i << ", " << fakeImage[i] << ")\n";
-	}
-	//cerr << endl << endl;
-	CLAHE* _imageTest = new CLAHE(fakeImage, fakeDims, 0, fakeSize - 1);
-	GLuint result = _imageTest->CLAHE_2D(2, 2, fakeSize, 0.85f);
-	w = 8;
-	h = 8;
-	d = 4;
-	fakeDims = glm::vec3(w, h, d);
-	fakeSize = w * h * d;
-	uint16_t* fakeVol = new uint16_t[fakeSize];
-	//cerr << "fakeImage: \n";
-	for (int i = 0; i < fakeSize; i++) {
-		fakeVol[i] = i;
-		//cerr << "(" << i << ", " << fakeImage[i] << ")\n";
-	}
-	//cerr << endl << endl;
-	CLAHE* _volumeTest = new CLAHE(fakeVol, fakeDims, 0, fakeSize-1);
-	result = _volumeTest->CLAHE_3D(2, 2, 2, fakeSize, 0.85f);*/
 	////////////////////////////////////////////////////////////////////////////
 
 	_textureMode = TextureMode::_RAW;
@@ -248,6 +220,8 @@ void SceneManager::Draw() {
 			case TextureMode::_FOCUSED:
 				_dicomCube->Draw(_volumeShader, _camera->GetViewProjectMtx(), _camera->GetCamPos(), _focusedDicomVolumeTexture);
 				break;
+			case TextureMode::_TEST:
+				_dicomCube->Draw(_volumeShader, _camera->GetViewProjectMtx(), _camera->GetCamPos(), _test_focused_volume);
 		}
 	}
 
@@ -285,7 +259,7 @@ void SceneManager::KeyCallback(GLFWwindow* window, int key, int scancode, int ac
 				// Close the window. This causes the program to also terminate.
 				glfwSetWindowShouldClose(window, GL_TRUE);
 				break;
-			case GLFW_KEY_T:
+			case GLFW_KEY_S:
 				// swap between the cube and the flat image
 				_drawVolume = !_drawVolume;
 				break;
@@ -301,6 +275,9 @@ void SceneManager::KeyCallback(GLFWwindow* window, int key, int scancode, int ac
 				break;
 			case GLFW_KEY_F:
 				_textureMode = TextureMode::_FOCUSED;
+				break;
+			case GLFW_KEY_T:
+				_textureMode = TextureMode::_TEST;
 				break;
 
 		}
