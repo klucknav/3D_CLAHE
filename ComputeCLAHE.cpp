@@ -12,7 +12,6 @@
 using namespace std;
 
 void mapHistogram(uint32_t minVal, uint32_t maxVal, uint32_t numPixelsSB, uint32_t numBins, uint32_t* localHist);
-void clipHistogramPass2(uint32_t excess, uint32_t clipValue, uint32_t numPixelsSB, uint32_t numBins, uint32_t* localHist);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Constructors/Destructors
@@ -247,20 +246,11 @@ void ComputeCLAHE::ComputeClipHist() {
 	// - clip the values and re-distribute some to all pixels
 
 	std::cerr << "clip Hist 1... ";
-	uint32_t* testing = new uint32_t[excessSize];
-	memset(testing, 0, excessSize * sizeof(uint32_t));
-
-	GLuint testBuffer;
-	glGenBuffers(1, &testBuffer);
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, testBuffer);
-	glBufferData(GL_SHADER_STORAGE_BUFFER, excessSize * sizeof(uint32_t), testing, GL_STREAM_READ);
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 
 	glUseProgram(_clipShader1);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, _histBuffer);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, _histMaxBuffer);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, _excessBuffer);
-	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, testBuffer);
 	glUniform1ui(glGetUniformLocation(_clipShader1, "NUM_BINS"), _numInGrayVals);
 	glUniform1f(glGetUniformLocation(_clipShader1, "clipLimit"), _clipLimit);
 
@@ -291,34 +281,17 @@ void ComputeCLAHE::ComputeClipHist() {
 	glBufferData(GL_SHADER_STORAGE_BUFFER, excessSize * sizeof(uint32_t), stepSize, GL_STREAM_READ);
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 
-	GLuint mutexBuffer;
-	uint32_t theMutex = 0;
-	glGenBuffers(1, &mutexBuffer);
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, mutexBuffer);
-	glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(uint32_t), &theMutex, GL_STREAM_READ);
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-
-	uint32_t* thread = new uint32_t[512];
-	memset(thread, 0, 512* sizeof(uint32_t));
-	GLuint threadBuffer;
-	glGenBuffers(1, &threadBuffer);
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, threadBuffer);
-	glBufferData(GL_SHADER_STORAGE_BUFFER, 512 * sizeof(uint32_t), thread, GL_STREAM_READ);
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-
 
 	glUseProgram(_clipShader2);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, _histBuffer);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, _histMaxBuffer);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, _excessBuffer);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, stepSizeBuffer);
-	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, mutexBuffer);
-	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 5, threadBuffer);
 	glUniform1ui(glGetUniformLocation(_clipShader2, "NUM_BINS"), _numInGrayVals);
 	glUniform1f(glGetUniformLocation(_excessShader, "clipLimit"), _clipLimit);
 
 
-	//glDispatchCompute((GLuint)((histSize + 63) / 64), 1, 1);
+	glDispatchCompute((GLuint)((histSize + 63) / 64), 1, 1);
 
 	// make sure writting to the image is finished before reading 
 	glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
@@ -370,22 +343,12 @@ void ComputeCLAHE::ComputeLerp() {
 	glBindTexture(GL_TEXTURE_3D, 0);
 
 
-	uint32_t testSize = _volDims.x * _volDims.y * _volDims.z;
-	uint32_t* testing = new uint32_t[testSize];
-	memset(testing, 0, testSize * sizeof(uint32_t));
-	GLuint testBuffer;
-	glGenBuffers(1, &testBuffer);
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, testBuffer);
-	glBufferData(GL_SHADER_STORAGE_BUFFER, testSize * sizeof(uint32_t), testing, GL_STREAM_READ);
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-
 	// Set up Compute Shader 
 	glUseProgram(_lerpShader);
 	glBindImageTexture(0, _volumeTexture, 0, GL_TRUE, _layer, GL_READ_ONLY, GL_R16UI);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, _LUTbuffer);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, _histBuffer);
 	glBindImageTexture(3, _newVolumeTexture, 0, GL_TRUE, _layer, GL_WRITE_ONLY, GL_R16F);
-	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, testBuffer);
 	glUniform3i(glGetUniformLocation(_lerpShader, "numSB"), _numSB.x, _numSB.y, _numSB.z);
 	glUniform1ui(glGetUniformLocation(_lerpShader, "NUM_BINS"), _numInGrayVals);
 
@@ -420,28 +383,6 @@ void mapHistogram(uint32_t minVal, uint32_t maxVal, uint32_t numPixelsSB, uint32
 		//cerr << "Val: " << val << " sum: " << sum << endl;
 		localHist[i] = (unsigned int)(std::min(minVal + sum * scale, (float)maxVal));
 	}
-}
-
-// multi-thread the second pass of redistributing the excess in each histogram
-void clipHistogramPass2(uint32_t excess, uint32_t clipValue, uint32_t numPixelsSB, uint32_t numBins, uint32_t* localHist) {
-
-	unsigned int* hist = localHist;
-	while (excess > 0) {
-
-		// based on the current amount of excess calculate the step size (must be at least 1)
-		unsigned int stepSize = std::max(1u, (numBins / excess));
-
-		// cycle through the histogram and distribute the excess
-		for (unsigned int index = 0; index < numBins && excess > 0; index += stepSize) {
-
-			// only add to the histogram if the value is not past the clipValue
-			if (hist[index] < clipValue) {
-				hist[index]++;
-				excess--;
-			}
-		}
-	}
-
 }
 
 ////////////////////////////////////////////////////////////////////////////////

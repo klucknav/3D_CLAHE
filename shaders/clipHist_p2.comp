@@ -23,12 +23,6 @@ layout (std430, binding = 2) buffer excessPixels {
 layout (std430, binding = 3) buffer stepSizeBuffer {
     uint stepSizes[];
 };
-layout (std430, binding = 4) buffer M {
-    uint mutex;
-};
-layout (std430, binding = 5) buffer theadBuffer {
-    uint thread[];
-};
 
 uniform uint NUM_BINS;      // number of gray values in the Volume 
 uniform float clipLimit;	// limit of pixel values
@@ -41,38 +35,21 @@ void main() {
     uint histIndex = index / NUM_BINS;
 
     // Pass 2 of redistributing the excess pixels 
-//    uint stepSize =  max(NUM_BINS / excess[ histIndex ], 1);   
     uint stepSize =  stepSizes[ histIndex ]; 
     uint clipValue = uint( float( histMax[ histIndex ] ) * clipLimit );
-    
-    memoryBarrier();
-//    excess[ histIndex] = stepSize;
+
 
     // get 0...NUM_BINS index
     uint currHistIndex = index % NUM_BINS;
 
     // add excess to the histogram
-    if (currHistIndex % stepSize == 0) {
-        int count = 0;
-        while (atomicCompSwap(mutex, uint(0), uint(1)) != 0) {
-            // wait
-            count ++;
-            if (count > 100){
-                uint idx = atomicAdd(thread[0], 1);
-                thread[(idx + 1) % 511 + 1] = index;
-                return;
-            }
-        }
-        if (hist[index] < clipValue && excess[histIndex] > 0) {
-            uint x = atomicMin( excess[ histIndex ], excess[histIndex] - 1);
-		    atomicAdd( hist[ index ], x == 0 ? 0 : 1);
-        }
-        atomicExchange(mutex, uint(0));
-    }
+    bool add = (currHistIndex % stepSize == 0) && (hist[index] < clipValue);
 
-//    if (currHistIndex == 0) { 
-//        uint temp = NUM_BINS / stepSize;
-//        temp = ~temp + 1;
-//        atomicAdd( excess[histIndex], -1 );
-//    }
+    barrier();
+
+    uint prev = atomicAdd(excess[histIndex], -1);
+    if (prev == 0) excess[histIndex] = 0;
+
+	atomicAdd(hist[index], (add && prev > 0) ? 1 : 0);
+
 }

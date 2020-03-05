@@ -19,10 +19,6 @@ layout(std430, binding = 1) buffer inHistMax {
 layout (std430, binding = 2) buffer excessPixels {
     uint excess[];
 };
-// input the amount of excess pixels 
-layout (std430, binding = 3) buffer testBuffer {
-    uint test[];
-};
 
 uniform uint NUM_BINS;      // number of gray values in the Volume 
 uniform float clipLimit;	// limit of pixel values
@@ -37,9 +33,6 @@ void main() {
     uint avgInc =  excess[ histIndex ] / NUM_BINS;
     uint clipValue = uint( float( histMax[ histIndex ] ) * clipLimit );
 	uint upperLimit = clipValue - avgInc ;	// Bins larger than upperLimit set to clipValue
-	// the above are OK 
-
-	test[histIndex] = avgInc;
 
 	// if the number in the histogram is too big -> clip the bin
 	uint histValue = hist[index];
@@ -62,5 +55,4 @@ void main() {
 			}
 		}
 	}
-    // 5. pass 2 of redistributing the excess pixels    (clipHist_3.comp)
 }

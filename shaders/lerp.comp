@@ -24,7 +24,8 @@ layout(r16f, binding = 3) uniform image3D newVolume;
 
 
 uniform ivec3 numSB;	// number of Sub Blocks
-uniform uint NUM_BINS;
+uniform uint NUM_BINS;	// number of gray values in the Volume 
+bool useLUT = false;	// if we need to use the LUT to map to a different bit range
 
 
 void main() {
@@ -43,67 +44,85 @@ void main() {
 	// block we are interpolating over
 	uint xRight, xLeft, yUp, yDown, zFront, zBack;
 	uint a, aInv, b, bInv, c, cInv;
+	uvec3 size = sizeBlock;
 
 	////////////////////////////////////////////////////////////////////////////
 	// X neighboors
 	if (currBlock.x == 0) {
 		xLeft = 0;							xRight = 0;
+		// X interpolation coefficients 
+		a = index.x - currBlock.x * sizeBlock.x;
 	}
 	else if (currBlock.x == numBlocks.x - 1) {
 		xLeft = currBlock.x / 2 ;			xRight = xLeft;
+		// X interpolation coefficients 
+		a = index.x - currBlock.x * sizeBlock.x;
 	}
 	else {
+		size.x *= 2;
 		if (currBlock.x % 2 == 0)	{
 			xLeft = currBlock.x / 2 - 1;	xRight = xLeft + 1;
+			a = index.x - currBlock.x * sizeBlock.x + sizeBlock.x;
+
 		}
 		else {
 			xLeft = currBlock.x / 2;		xRight = xLeft + 1;
+			// X interpolation coefficients 
+			a = index.x - currBlock.x * sizeBlock.x;
 		}
 	}
 	// X interpolation coefficients 
-	a = index.x - currBlock.x * sizeBlock.x;
-	aInv = sizeBlock.x - a;
+	aInv = size.x - a;
 
 	////////////////////////////////////////////////////////////////////////////
 	// Y neighboors
 	if (currBlock.y == 0) {
 		yUp = 0;							yDown = 0;
+		b = index.y - currBlock.y * sizeBlock.y;
 	}
 	else if (currBlock.y == numBlocks.y - 1) {
 		yUp = currBlock.y / 2;				yDown = yUp;
+		b = index.y - currBlock.y * sizeBlock.y;
 	}
 	else {
+		size.y *= 2;
 		if (currBlock.y % 2 == 0) {
 			yUp = currBlock.y / 2 - 1;		yDown = yUp + 1;
+			b = index.y - currBlock.y * sizeBlock.y + sizeBlock.y;
 		}
 		else {
 			yUp = currBlock.y / 2;			yDown = yUp + 1;
+			b = index.y - currBlock.y * sizeBlock.y;
 		}
 	}
 	// Y interpolation coefficients 
-	b = index.y - currBlock.y * sizeBlock.y;
-	bInv = sizeBlock.y - b;
+	bInv = size.y - b;
 
 	////////////////////////////////////////////////////////////////////////////
 	// Z neighboors
 	if (currBlock.z == 0) {
 		zFront = 0;							zBack = 0;
+		c = index.z - currBlock.z * sizeBlock.z;
 	}
 	else if (currBlock.z == numBlocks.z - 1) {
 		zFront = currBlock.z / 2;			zBack = zFront;
+		c = index.z - currBlock.z * sizeBlock.z;
 	}
 	else {
+		size.z *= 2;
 		if (currBlock.z % 2 == 0) {
 			zFront = currBlock.z / 2 - 1;	zBack = zFront + 1;
+			c = index.z - currBlock.z * sizeBlock.z + sizeBlock.z;
 		}
 		else {
 			zFront = currBlock.z / 2;		zBack = zFront + 1;
+			c = index.z - currBlock.z * sizeBlock.z;
 		}
 	}
 	// Z interpolation coefficients 
-	c = index.z - currBlock.z * sizeBlock.z;
-	cInv = sizeBlock.z - c;
+	cInv = size.z - c;
 	
+
 	////////////////////////////////////////////////////////////////////////////
 	// get the histogram indices for the neighbooring subblocks 
 	uint LUF = NUM_BINS * (zFront * numSB.x * numSB.y + yUp   * numSB.x + xLeft  );
@@ -121,25 +140,25 @@ void main() {
 	// LERP
 
 	// get the current gray value 
-//	uint greyValue = LUT [ imageLoad(volume, ivec3(index)).x ];
 	uint greyValue = imageLoad(volume, ivec3(index)).x;
+	if (useLUT) {
+		greyValue = LUT [ greyValue ];
+	}
 
 	// bilinear interpolation - zFront
-	float p1_front = aInv * float(hist[LUF + greyValue]) / float(NUM_BINS) + a * float(hist[RUF + greyValue]) / float(NUM_BINS);
-	float p2_front = aInv * float(hist[LDF + greyValue]) / float(NUM_BINS) + a * float(hist[RDF + greyValue]) / float(NUM_BINS);
-	float q_front  = bInv * p1_front + b * p2_front;
+	float up_front = aInv * float(hist[LUF + greyValue]) / float(NUM_BINS) + a * float(hist[RUF + greyValue]) / float(NUM_BINS);
+	float dn_front = aInv * float(hist[LDF + greyValue]) / float(NUM_BINS) + a * float(hist[RDF + greyValue]) / float(NUM_BINS);
+	float front  = bInv * up_front + b * dn_front;
 
 	// bilinear interpolation - zBack
-	float p1_back = aInv * float(hist[LUB + greyValue]) / float(NUM_BINS) + a * float(hist[RUB + greyValue]) / float(NUM_BINS);
-	float p2_back = aInv * float(hist[LDB + greyValue]) / float(NUM_BINS) + a * float(hist[RDB + greyValue]) / float(NUM_BINS);
-	float q_back  = bInv * p1_back + b * p2_back;
+	float up_back = aInv * float(hist[LUB + greyValue]) / float(NUM_BINS) + a * float(hist[RUB + greyValue]) / float(NUM_BINS);
+	float dn_back = aInv * float(hist[LDB + greyValue]) / float(NUM_BINS) + a * float(hist[RDB + greyValue]) / float(NUM_BINS);
+	float back  = bInv * up_back + b * dn_back;
 
 	// trilinear interpolation
-	float normFactor = float(sizeBlock.x) * float(sizeBlock.y) * float(sizeBlock.z);
-	float ans = (cInv * q_front + c * q_back) / normFactor;
+	float normFactor = float(size.x) * float(size.y) * float(size.z);
+	float ans = (cInv * front + c * back) / normFactor;
 
 	// store new value back into the volume texture 
-//	vec4 newGrayVal = vec4(greyValue/float(NUM_BINS), 0, 0, 0);
-	vec4 newGrayVal = vec4(ans, 0, 0, 0);
-	imageStore(newVolume, ivec3(index), newGrayVal);
+	imageStore(newVolume, ivec3(index), vec4(ans, 0, 0, 0));
 }

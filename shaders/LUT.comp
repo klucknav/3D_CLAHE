@@ -29,7 +29,7 @@ void main() {
 	uint globalMax = minMaxData[1];
 	
 	// calculate the size of the bins
-	uint binSize = uint((globalMax - globalMin) / NUM_OUT_BINS);
+	uint binSize = 1 + uint((globalMax - globalMin) / NUM_OUT_BINS);
 
 	// build up the LUT
 	if (index >= globalMin || index <= globalMax) {
