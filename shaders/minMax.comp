@@ -17,12 +17,17 @@ layout(std430, binding = 1) buffer minMaxBuffer {
 
 uniform uint NUM_BINS;	// number of gray values in the Volume 
 uniform uvec3 offset;	// start of the region to apply CLAHE to
+uniform uvec3 volumeDims;	// size of the section of the volume we are applying CLAHE to 
 
 void main() {
 
 	// calculate the max and min for the volume 
 	uvec3 index = gl_GlobalInvocationID.xyz;
 	uint val = imageLoad(volume, ivec3(index + offset)).x;
+
+	if ( index.x >= volumeDims.x || index.y >= volumeDims.y || index.z >= volumeDims.z ) {
+		return;
+	}
 
 	atomicMin(minMaxData[0], val);
 	atomicMax(minMaxData[1], val);

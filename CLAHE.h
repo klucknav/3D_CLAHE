@@ -57,7 +57,7 @@ private:
 				uint16_t* LUT, unsigned int numBins, unsigned int xDim, unsigned int yDim);
 
 	// Printing Helper Methods 
-	void printHist(unsigned int* hist, unsigned int max);
+	void printHist(unsigned int* hist, unsigned int max, unsigned int min=0u);
 	void maxHistVal(unsigned int* hist, unsigned int max);
 	void countHist(unsigned int* hist, unsigned int max);
 

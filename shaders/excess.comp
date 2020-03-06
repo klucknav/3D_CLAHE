@@ -31,7 +31,6 @@ void main() {
 
     // Compute the clip value of the current Histogram
     uint clipValue = uint( float( histMax[ histIndex ] ) * clipLimit );
-//    uint clipValue = 55704;
     
     // Calculate the number of excess pixels
     atomicAdd( excess[ histIndex ], max(0, int(hist[index]) - int(clipValue)));

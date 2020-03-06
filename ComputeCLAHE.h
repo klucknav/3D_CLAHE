@@ -22,8 +22,6 @@ private:
 	unsigned int _numInGrayVals;
 
 	// CLAHE Data
-	//glm::vec3 _numSB = glm::vec3(4, 4, 2);
-	float _clipLimit = 0.85f;
 	bool _useLUT = true;
 
 	// calculated data
@@ -40,7 +38,7 @@ private:
 	void computeMinMax(glm::uvec3 volDims, glm::uvec3 offset = glm::uvec3(0));
 	void computeLUT();
 	void computeHist(glm::uvec3 volDims, glm::uvec3 numSB, glm::uvec3 offset = glm::uvec3(0));
-	void computeClipHist(glm::uvec3 volDims, glm::uvec3 numSB);
+	void computeClipHist(glm::uvec3 volDims, glm::uvec3 numSB, float clipLimit);
 	GLuint computeLerp(glm::uvec3 volDims, glm::uvec3 numSB, glm::uvec3 offset = glm::uvec3(0));
 	GLuint computeFocusedLerp(glm::uvec3 volDims, glm::uvec3 numSB, glm::uvec3 minVal, glm::vec3 maxVal);
 
@@ -49,7 +47,7 @@ public:
 	~ComputeCLAHE();
 
 	// CLAHE Methods
-	GLuint Compute3D_CLAHE(glm::uvec3 numSB);
-	GLuint ComputeFocused3D_CLAHE(glm::uvec3 min, glm::uvec3 max);
+	GLuint Compute3D_CLAHE(glm::uvec3 numSB, float clipLimit);
+	GLuint ComputeFocused3D_CLAHE(glm::uvec3 min, glm::uvec3 max, float clipLimit);
 
 };

@@ -146,7 +146,7 @@ void SceneManager::InitScene() {
 	//glm::uvec3 numSB = glm::uvec3(2, 2, 1);
 	glm::uvec3 numSB = glm::uvec3(4, 4, 2);
 	unsigned int numGrayValsFinal3D = 65536;
-	float clipLimit3D = 0.85f;
+	float clipLimit3D = 1.0f;
 	
 	CLAHE* _volumeTest = new CLAHE(_dicomVolume);
 
@@ -154,8 +154,8 @@ void SceneManager::InitScene() {
 	//_claheDicomVolumeTexture = _volumeTest->CLAHE_3D(numSB, numGrayValsFinal3D, clipLimit3D);
 	
 	// Focused 3D CLAHE
-	glm::uvec3 min3D = glm::uvec3(200, 200, 50);
-	glm::uvec3 max3D = glm::uvec3(400, 400, 100);
+	glm::uvec3 min3D = glm::uvec3(200, 200, 40);
+	glm::uvec3 max3D = glm::uvec3(400, 400, 90);
 	//_focusedDicomVolumeTexture = _volumeTest->Focused_CLAHE_3D(min3D, max3D, numGrayValsFinal3D, clipLimit3D);
 	_test_focused_volume = _volumeTest->Focused_CLAHE_3D(min3D, max3D, numGrayValsFinal3D, clipLimit3D);
 
@@ -164,8 +164,8 @@ void SceneManager::InitScene() {
 
 	unsigned int numFinalGrayVals = 65536;
 	ComputeCLAHE comp = ComputeCLAHE(_dicomVolumeTexture, volDim, numFinalGrayVals, numFinalGrayVals);
-	_claheDicomVolumeTexture = comp.Compute3D_CLAHE(numSB);
-	_focusedDicomVolumeTexture = comp.ComputeFocused3D_CLAHE(min3D, max3D);
+	_claheDicomVolumeTexture = comp.Compute3D_CLAHE(numSB, clipLimit3D);
+	_focusedDicomVolumeTexture = comp.ComputeFocused3D_CLAHE(min3D, max3D, clipLimit3D);
 	
 
 	////////////////////////////////////////////////////////////////////////////
@@ -259,7 +259,7 @@ void SceneManager::KeyCallback(GLFWwindow* window, int key, int scancode, int ac
 				// Close the window. This causes the program to also terminate.
 				glfwSetWindowShouldClose(window, GL_TRUE);
 				break;
-			case GLFW_KEY_S:
+			case GLFW_KEY_V:
 				// swap between the cube and the flat image
 				_drawVolume = !_drawVolume;
 				break;

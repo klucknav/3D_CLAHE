@@ -293,6 +293,7 @@ void CLAHE::mapHistogram(unsigned int* localHist, unsigned int numBins, unsigned
 
 	float sum = 0;
 	const float scale = ((float)(_maxVal - _minVal)) / (float) numPixelsCR;
+	//printf("min: %u, \tmax: %u, \tnumPixels: %u, \tnumBins: %u, scale: %f\n", _minVal, _maxVal, numPixelsCR, numBins, scale);
 
 	// for each bin
 	for (unsigned int i = 0; i < numBins; i++) {
@@ -300,9 +301,7 @@ void CLAHE::mapHistogram(unsigned int* localHist, unsigned int numBins, unsigned
 		// add the histogram value for this contextual region to the sum 
 		sum += localHist[i]; 
 
-		// to normalize the cdf
-		float val = (min(_minVal + sum * scale, (float)_maxVal));
-		//cerr << "Val: " << val << " sum: " << sum << endl;
+		// normalize the cdf
 		localHist[i] = (unsigned int)(min(_minVal + sum * scale, (float)_maxVal));
 	}
 }
@@ -668,7 +667,7 @@ void CLAHE::clahe3D(uint16_t* volume, glm::uvec3 volDim, glm::uvec3 numSB, unsig
 
 				// calculate the local histogram for the given subBlock
 				makeHistogram3D(volume, startX, startY, startZ, endX, endY, endZ, currHist, LUT, volDim.x, volDim.y);
-
+				
 				// clip the Histogram
 				clipHistogram(clipLimit, numBins, currHist);
 
@@ -832,10 +831,18 @@ int CLAHE::Focused_CLAHE_3D(glm::uvec3 min, glm::uvec3 max, unsigned int numBins
 	// take out the section you want to enhance
 	uint16_t* subVolumeData = new uint16_t[xDim * yDim * zDim];
 	memset(subVolumeData, 0, sizeof(uint16_t) * xDim * yDim * zDim);
+	uint16_t maxVal = 0;
+	uint16_t minVal = numBins;
 	for (unsigned int zIndex = min.z, z = 0; zIndex < max.z; zIndex++, z++) {
 		for (unsigned int yIndex = min.y, y = 0; yIndex < max.y; yIndex++, y++) {
 			for (unsigned int xIndex = min.x, x = 0; xIndex < max.x; xIndex++, x++) {
 				subVolumeData[z * xDim * yDim + y * xDim + x] = volumeData[zIndex * _imgDimX * _imgDimY + yIndex * _imgDimX + xIndex];
+				if (volumeData[zIndex * _imgDimX * _imgDimY + yIndex * _imgDimX + xIndex] > maxVal) {
+					maxVal = volumeData[zIndex * _imgDimX * _imgDimY + yIndex * _imgDimX + xIndex];
+				}
+				if (volumeData[zIndex * _imgDimX * _imgDimY + yIndex * _imgDimX + xIndex] < minVal) {
+					minVal = volumeData[zIndex * _imgDimX * _imgDimY + yIndex * _imgDimX + xIndex];
+				}
 			}
 		}
 	}
@@ -846,8 +853,10 @@ int CLAHE::Focused_CLAHE_3D(glm::uvec3 min, glm::uvec3 max, unsigned int numBins
 	unsigned int numSBz = std::max((int)(zDim / 100), 1);
 
 	// perform CLAHE on the selected region
-	printf("\n----- Focused 3D CLAHE -----\n");
+	printf("\n----- Focused 3D CLAHE -----\n");	
+	printf("Range of values in the focused region: (%d, %d)\n", maxVal);
 	printf("x range: [%d, %d], y range: [%d, %d], z range: [%d, %d]\n", min.x, max.x, min.y, max.y, min.z, max.z);
+	printf("clipLimit: %f, numSubBlocks: (%u, %u, %u)\n", clipLimit, numSBx, numSBy, numSBz);
 	clahe3D(subVolumeData, glm::uvec3(xDim, yDim, zDim), glm::uvec3(numSBx, numSBy, numSBz), numBins, clipLimit);
 
 	// put the section back into the volume
@@ -873,19 +882,24 @@ int CLAHE::Focused_CLAHE_3D(glm::uvec3 min, glm::uvec3 max, unsigned int numBins
 ////////////////////////////////////////////////////////////////////////////////
 // Printing Helper Functions
 
-void CLAHE::printHist(unsigned int* hist, unsigned int max) {
+void CLAHE::printHist(unsigned int* hist, unsigned int max, unsigned int min) {
 
 	cerr << "Histogram: \n";
 	unsigned int count = 0;
-	for (unsigned int i = 0; i < max-1; i++) {
-		printf("(%3d, %d) ", i, hist[i]);
+	for (unsigned int i = min; i < max-1; i++) {
+		if (count == 0) {
+			printf("%6d: ", i/8);
+		}
+		//printf("(%3d, %d) ", i, hist[i]);
+		printf(" %6d ", hist[i]);
 		if (count == 7) {
 			cerr << endl;
 			count = -1;
 		}
 		count++;
 	}
-	printf("(%3d, %d)\n", max-1, hist[max-1]);
+	//printf("(%3d, %d)\n", max-1, hist[max-1]);
+	printf(" %6d\n", hist[max-1]);
 }
 
 void CLAHE::maxHistVal(unsigned int* hist, unsigned int max) {

@@ -56,7 +56,7 @@ ComputeCLAHE::~ComputeCLAHE() {
 ////////////////////////////////////////////////////////////////////////////////
 // CLAHE Functions
 
-GLuint ComputeCLAHE::Compute3D_CLAHE(glm::uvec3 numSB) {
+GLuint ComputeCLAHE::Compute3D_CLAHE(glm::uvec3 numSB, float clipLimit) {
 
 	printf("\n----- Compute 3D CLAHE -----\n");
 	printf("using (%u, %u, %u) subBlocks\n", numSB.x, numSB.y, numSB.z);
@@ -69,7 +69,7 @@ GLuint ComputeCLAHE::Compute3D_CLAHE(glm::uvec3 numSB) {
 
 	// Hist
 	computeHist(_volDims, numSB);
-	computeClipHist(_volDims, numSB);
+	computeClipHist(_volDims, numSB, clipLimit);
 
 	// Lerp
 	GLuint newTexture = computeLerp(_volDims, numSB);
@@ -81,7 +81,7 @@ GLuint ComputeCLAHE::Compute3D_CLAHE(glm::uvec3 numSB) {
 	return newTexture;
 }
 
-GLuint ComputeCLAHE::ComputeFocused3D_CLAHE(glm::uvec3 min, glm::uvec3 max) {
+GLuint ComputeCLAHE::ComputeFocused3D_CLAHE(glm::uvec3 min, glm::uvec3 max, float clipLimit) {
 
 	printf("\n----- Compute focused 3D CLAHE -----\n");
 	printf("x range: [%d, %d], y range: [%d, %d], z range: [%d, %d]\n", min.x, max.x, min.y, max.y, min.z, max.z);
@@ -95,7 +95,7 @@ GLuint ComputeCLAHE::ComputeFocused3D_CLAHE(glm::uvec3 min, glm::uvec3 max) {
 	unsigned int numSBy = std::max((focusedDim.y / 100), 1);
 	unsigned int numSBz = std::max((focusedDim.z / 100), 1);
 	glm::uvec3 numSB = glm::uvec3(numSBx, numSBy, numSBz);
-	printf("using (%u, %u, %u) subBlocks\n", numSB.x, numSB.y, numSB.z);
+	printf("clipLimit: %f, numSubBlocks(%u, %u, %u)\n", clipLimit, numSB.x, numSB.y, numSB.z);
 
 	// take out the section of data and create a texture with it
 
@@ -105,7 +105,7 @@ GLuint ComputeCLAHE::ComputeFocused3D_CLAHE(glm::uvec3 min, glm::uvec3 max) {
 
 	// Hist
 	computeHist(focusedDim, numSB, min);
-	computeClipHist(focusedDim, numSB);
+	computeClipHist(focusedDim, numSB, clipLimit);
 
 	// Lerp
 	GLuint newTexture = computeFocusedLerp(focusedDim, numSB, min, max);
@@ -135,6 +135,7 @@ void ComputeCLAHE::computeMinMax(glm::uvec3 volDims, glm::uvec3 offset) {
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, _globalMinMaxBuffer);
 	glUniform1ui(glGetUniformLocation(_minMaxShader, "NUM_BINS"), _numInGrayVals);
 	glUniform3ui(glGetUniformLocation(_minMaxShader, "offset"), offset.x, offset.y, offset.z);
+	glUniform3ui(glGetUniformLocation(_minMaxShader, "volumeDims"), volDims.x, volDims.y, volDims.z);
 
 	glDispatchCompute(	(GLuint)((volDims.x + 3) / 4),
 						(GLuint)((volDims.y + 3) / 4),
@@ -207,6 +208,7 @@ void ComputeCLAHE::computeHist(glm::uvec3 volDims, glm::uvec3 numSB, glm::uvec3 
 	glUniform1ui(glGetUniformLocation(_histShader, "NUM_BINS"), _numInGrayVals);
 	glUniform3ui(glGetUniformLocation(_histShader, "offset"), offset.x, offset.y, offset.z);
 	glUniform1i(glGetUniformLocation(_histShader, "useLUT"), _useLUT);
+	glUniform3ui(glGetUniformLocation(_histShader, "volumeDims"), volDims.x, volDims.y, volDims.z);
 
 	glDispatchCompute(	(GLuint)((volDims.x + 3) / 4),
 						(GLuint)((volDims.y + 3) / 4),
@@ -217,104 +219,110 @@ void ComputeCLAHE::computeHist(glm::uvec3 volDims, glm::uvec3 numSB, glm::uvec3 
 	glUseProgram(0);
 }
 
-void ComputeCLAHE::computeClipHist(glm::uvec3 volDims, glm::uvec3 numSB) {
-
-	std::cerr << "\nexcess ... ";
-	////////////////////////////////////////////////////////////////////////////
-	// Calculate the excess pixels based on the clipLimit
+void ComputeCLAHE::computeClipHist(glm::uvec3 volDims, glm::uvec3 numSB, float clipLimit) {
 
 	uint32_t histSize = _numFinalGrayVals * numSB.x * numSB.y * numSB.z;
-
-	// buffer for the pixels to re-distribute
 	uint32_t excessSize = numSB.x * numSB.y * numSB.z;
-	uint32_t* excess = new uint32_t[excessSize];
-	memset(excess, 0, excessSize * sizeof(uint32_t));
 
-	glGenBuffers(1, &_excessBuffer);
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, _excessBuffer);
-	glBufferData(GL_SHADER_STORAGE_BUFFER, excessSize * sizeof(uint32_t), excess, GL_STREAM_READ);
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+	if (clipLimit < 1.0f) {
+		std::cerr << "\nexcess ... ";
+		////////////////////////////////////////////////////////////////////////////
+		// Calculate the excess pixels based on the clipLimit
 
-	// Set up Compute Shader 
-	glUseProgram(_excessShader);
-	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, _histBuffer);
-	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, _histMaxBuffer);
-	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, _excessBuffer);
-	glUniform1ui(glGetUniformLocation(_excessShader, "NUM_BINS"), _numInGrayVals);
-	glUniform1f(glGetUniformLocation(_excessShader, "clipLimit"), _clipLimit);
 
-	glDispatchCompute( (GLuint)((histSize + 63) / 64), 1, 1 );
+		// buffer for the pixels to re-distribute
+		uint32_t* excess = new uint32_t[excessSize];
+		memset(excess, 0, excessSize * sizeof(uint32_t));
 
-	// make sure writting to the image is finished before reading 
-	glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-	glUseProgram(0);
-
-	////////////////////////////////////////////////////////////////////////////
-	// Clip the Histogram - Pass 1 
-	// - clip the values and re-distribute some to all pixels
-
-	std::cerr << "clip Hist 1... ";
-
-	glUseProgram(_clipShader1);
-	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, _histBuffer);
-	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, _histMaxBuffer);
-	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, _excessBuffer);
-	glUniform1ui(glGetUniformLocation(_clipShader1, "NUM_BINS"), _numInGrayVals);
-	glUniform1f(glGetUniformLocation(_clipShader1, "clipLimit"), _clipLimit);
-
-	glDispatchCompute((GLuint)((histSize + 63) / 64), 1, 1);
-
-	// make sure writting to the image is finished before reading 
-	glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-	glUseProgram(0);
-
-	////////////////////////////////////////////////////////////////////////////
-	// Clip the Histogram - Pass 2 
-	// - redistribute the remaining excess pixels throughout the image
-	std::cerr << "clip Hist 2... ";
-
-	// compute stepSize for the second pass of redistributing the excess pixels
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, _excessBuffer);
-	excess = (uint32_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
-	uint32_t* stepSize = new uint32_t[excessSize];
-	memset(stepSize, 0, excessSize * sizeof(uint32_t));
-	bool computePass2 = false;
-	for (unsigned int i = 0; i < excessSize; i++) {
-		if (excess[i] == 0) {
-			stepSize[i] = 0;
-		}
-		else {
-			stepSize[i] = std::max(_numInGrayVals / excess[i], 1u);
-			computePass2 = true;
-		}
-	}
-	glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
-	glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_CLIENT_MAPPED_BUFFER_BARRIER_BIT);
-
-	if (computePass2) {
-		GLuint stepSizeBuffer;
-		glGenBuffers(1, &stepSizeBuffer);
-		glBindBuffer(GL_SHADER_STORAGE_BUFFER, stepSizeBuffer);
-		glBufferData(GL_SHADER_STORAGE_BUFFER, excessSize * sizeof(uint32_t), stepSize, GL_STREAM_READ);
+		glGenBuffers(1, &_excessBuffer);
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, _excessBuffer);
+		glBufferData(GL_SHADER_STORAGE_BUFFER, excessSize * sizeof(uint32_t), excess, GL_STREAM_READ);
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 
-
-		glUseProgram(_clipShader2);
+		// Set up Compute Shader 
+		glUseProgram(_excessShader);
 		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, _histBuffer);
 		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, _histMaxBuffer);
 		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, _excessBuffer);
-		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, stepSizeBuffer);
-		glUniform1ui(glGetUniformLocation(_clipShader2, "NUM_BINS"), _numInGrayVals);
-		glUniform1f(glGetUniformLocation(_excessShader, "clipLimit"), _clipLimit);
-
+		glUniform1ui(glGetUniformLocation(_excessShader, "NUM_BINS"), _numInGrayVals);
+		glUniform1f(glGetUniformLocation(_excessShader, "clipLimit"), clipLimit);
 
 		glDispatchCompute((GLuint)((histSize + 63) / 64), 1, 1);
 
 		// make sure writting to the image is finished before reading 
 		glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 		glUseProgram(0);
-	}
 
+		////////////////////////////////////////////////////////////////////////////
+		// Clip the Histogram - Pass 1 
+		// - clip the values and re-distribute some to all pixels
+
+		std::cerr << "clip Hist 1... ";
+
+		glUseProgram(_clipShader1);
+		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, _histBuffer);
+		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, _histMaxBuffer);
+		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, _excessBuffer);
+		glUniform1ui(glGetUniformLocation(_clipShader1, "NUM_BINS"), _numInGrayVals);
+		glUniform1f(glGetUniformLocation(_clipShader1, "clipLimit"), clipLimit);
+
+		glDispatchCompute((GLuint)((histSize + 63) / 64), 1, 1);
+
+		// make sure writting to the image is finished before reading 
+		glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+		glUseProgram(0);
+
+		////////////////////////////////////////////////////////////////////////////
+		// Clip the Histogram - Pass 2 
+		// - redistribute the remaining excess pixels throughout the image
+		std::cerr << "clip Hist 2... ";
+
+		// compute stepSize for the second pass of redistributing the excess pixels
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, _excessBuffer);
+		excess = (uint32_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
+		uint32_t* stepSize = new uint32_t[excessSize];
+		memset(stepSize, 0, excessSize * sizeof(uint32_t));
+		bool computePass2 = false;
+		for (unsigned int i = 0; i < excessSize; i++) {
+			if (excess[i] == 0) {
+				stepSize[i] = 0;
+			}
+			else {
+				stepSize[i] = std::max(_numInGrayVals / excess[i], 1u);
+				computePass2 = true;
+			}
+		}
+		glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
+		glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_CLIENT_MAPPED_BUFFER_BARRIER_BIT);
+
+		if (computePass2) {
+			GLuint stepSizeBuffer;
+			glGenBuffers(1, &stepSizeBuffer);
+			glBindBuffer(GL_SHADER_STORAGE_BUFFER, stepSizeBuffer);
+			glBufferData(GL_SHADER_STORAGE_BUFFER, excessSize * sizeof(uint32_t), stepSize, GL_STREAM_READ);
+			glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+
+
+			glUseProgram(_clipShader2);
+			glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, _histBuffer);
+			glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, _histMaxBuffer);
+			glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, _excessBuffer);
+			glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, stepSizeBuffer);
+			glUniform1ui(glGetUniformLocation(_clipShader2, "NUM_BINS"), _numInGrayVals);
+			glUniform1f(glGetUniformLocation(_excessShader, "clipLimit"), clipLimit);
+
+
+			glDispatchCompute((GLuint)((histSize + 63) / 64), 1, 1);
+
+			// make sure writting to the image is finished before reading 
+			glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+			glUseProgram(0);
+		}
+		else {
+			std::cerr << " no need ";
+		}
+		delete[] stepSize;
+	}
 
 	////////////////////////////////////////////////////////////////////////////
 	// Map the histograms 
@@ -340,7 +348,6 @@ void ComputeCLAHE::computeClipHist(glm::uvec3 volDims, glm::uvec3 numSB) {
 	glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
 	glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_CLIENT_MAPPED_BUFFER_BARRIER_BIT);
 
-	delete[] stepSize;
 	printf("\n");
 }
 
@@ -428,11 +435,12 @@ GLuint ComputeCLAHE::computeFocusedLerp(glm::uvec3 volDims, glm::uvec3 numSB, gl
 ////////////////////////////////////////////////////////////////////////////////
 // Helper Methods
 // multi-thread map hist across each histogram 
+
 void mapHistogram(uint32_t minVal, uint32_t maxVal, uint32_t numPixelsSB, uint32_t numBins, uint32_t* localHist) {
 
 	float sum = 0;
 	const float scale = ((float)(maxVal - minVal)) / (float)numPixelsSB;
-	//printf("min: %u, \tmax: %u, \tnumPixels: %u, \tnumBins: %u\n", minVal, maxVal, numPixelsSB, numBins);
+	//printf("min: %u, \tmax: %u, \tnumPixels: %u, \tnumBins: %u, scale: %f\n", minVal, maxVal, numPixelsSB, numBins, scale);
 
 	// for each bin
 	for (unsigned int i = 0; i < numBins; i++) {
@@ -440,10 +448,8 @@ void mapHistogram(uint32_t minVal, uint32_t maxVal, uint32_t numPixelsSB, uint32
 		// add the histogram value for this contextual region to the sum 
 		sum += localHist[i];
 
-		// to normalize the cdf
-		float val = (std::min(minVal + sum * scale, (float)maxVal));
-		//cerr << "Val: " << val << " sum: " << sum << endl;
-		localHist[i] = (unsigned int)(std::min(minVal + sum * scale, (float)maxVal));
+		// normalize the cdf
+		localHist[i] = (unsigned int)(min(minVal + sum * scale, (float)maxVal));
 	}
 }
 
