@@ -23,11 +23,12 @@ layout(std430, binding = 2) buffer inHist {
 layout(r16f, binding = 3) uniform image3D newVolume;
 
 
-uniform ivec3 numSB;	// number of Sub Blocks
-uniform uint NUM_BINS;	// number of gray values in the Volume 
-uniform bool useLUT;	// if we need to use the LUT to map to a different bit range
-uniform uvec3 minVal;	// min/maxVals make up the range of the volume 
-uniform uvec3 maxVal;	// to apply CLAHE to
+uniform ivec3 numSB;		// number of Sub Blocks
+uniform uint NUM_IN_BINS;	// number of gray values in the Volume 
+uniform uint NUM_OUT_BINS;	// number of gray values in the new Volume
+uniform bool useLUT;		// if we need to use the LUT to map to a different bit range
+uniform uvec3 minVal;		// min/maxVals make up the range of the volume 
+uniform uvec3 maxVal;		// to apply CLAHE to
 
 
 void main() {
@@ -129,15 +130,15 @@ void main() {
 
 		////////////////////////////////////////////////////////////////////////////
 		// get the histogram indices for the neighbooring subblocks 
-		uint LUF = NUM_BINS * (zFront * numSB.x * numSB.y + yUp   * numSB.x + xLeft  );
-		uint RUF = NUM_BINS * (zFront * numSB.x * numSB.y + yUp   * numSB.x + xRight );
-		uint LDF = NUM_BINS * (zFront * numSB.x * numSB.y + yDown * numSB.x + xLeft  );
-		uint RDF = NUM_BINS * (zFront * numSB.x * numSB.y + yDown * numSB.x + xRight );
+		uint LUF = NUM_IN_BINS * (zFront * numSB.x * numSB.y + yUp   * numSB.x + xLeft  );
+		uint RUF = NUM_IN_BINS * (zFront * numSB.x * numSB.y + yUp   * numSB.x + xRight );
+		uint LDF = NUM_IN_BINS * (zFront * numSB.x * numSB.y + yDown * numSB.x + xLeft  );
+		uint RDF = NUM_IN_BINS * (zFront * numSB.x * numSB.y + yDown * numSB.x + xRight );
 
-		uint LUB = NUM_BINS * (zBack * numSB.x * numSB.y + yUp   * numSB.x + xLeft   );
-		uint RUB = NUM_BINS * (zBack * numSB.x * numSB.y + yUp   * numSB.x + xRight  );
-		uint LDB = NUM_BINS * (zBack * numSB.x * numSB.y + yDown * numSB.x + xLeft   );
-		uint RDB = NUM_BINS * (zBack * numSB.x * numSB.y + yDown * numSB.x + xRight  );
+		uint LUB = NUM_IN_BINS * (zBack * numSB.x * numSB.y + yUp   * numSB.x + xLeft   );
+		uint RUB = NUM_IN_BINS * (zBack * numSB.x * numSB.y + yUp   * numSB.x + xRight  );
+		uint LDB = NUM_IN_BINS * (zBack * numSB.x * numSB.y + yDown * numSB.x + xLeft   );
+		uint RDB = NUM_IN_BINS * (zBack * numSB.x * numSB.y + yDown * numSB.x + xRight  );
 
 
 		////////////////////////////////////////////////////////////////////////////
@@ -151,13 +152,13 @@ void main() {
 
 
 		// bilinear interpolation - zFront
-		float up_front = aInv * float(hist[LUF + greyValue]) / float(NUM_BINS) + a * float(hist[RUF + greyValue]) / float(NUM_BINS);
-		float dn_front = aInv * float(hist[LDF + greyValue]) / float(NUM_BINS) + a * float(hist[RDF + greyValue]) / float(NUM_BINS);
+		float up_front = aInv * float(hist[LUF + greyValue]) / float(NUM_IN_BINS) + a * float(hist[RUF + greyValue]) / float(NUM_IN_BINS);
+		float dn_front = aInv * float(hist[LDF + greyValue]) / float(NUM_IN_BINS) + a * float(hist[RDF + greyValue]) / float(NUM_IN_BINS);
 		float front  = bInv * up_front + b * dn_front;
 
 		// bilinear interpolation - zBack
-		float up_back = aInv * float(hist[LUB + greyValue]) / float(NUM_BINS) + a * float(hist[RUB + greyValue]) / float(NUM_BINS);
-		float dn_back = aInv * float(hist[LDB + greyValue]) / float(NUM_BINS) + a * float(hist[RDB + greyValue]) / float(NUM_BINS);
+		float up_back = aInv * float(hist[LUB + greyValue]) / float(NUM_IN_BINS) + a * float(hist[RUB + greyValue]) / float(NUM_IN_BINS);
+		float dn_back = aInv * float(hist[LDB + greyValue]) / float(NUM_IN_BINS) + a * float(hist[RDB + greyValue]) / float(NUM_IN_BINS);
 		float back  = bInv * up_back + b * dn_back;
 
 		// trilinear interpolation
@@ -169,7 +170,7 @@ void main() {
 	}
 	else {
 		uint greyValue = imageLoad(volume, ivec3(index)).x;
-		vec4 color = vec4(float(greyValue) / float(NUM_BINS), 0, 0, 0);
+		vec4 color = vec4(float(greyValue) / float(NUM_IN_BINS), 0, 0, 0);
 		imageStore(newVolume, ivec3(index), color);
 	}
 }

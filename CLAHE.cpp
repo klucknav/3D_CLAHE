@@ -788,11 +788,14 @@ int CLAHE::CLAHE_3D(glm::uvec3 numSB, unsigned int numBins, float clipLimit) {
 	chrono::high_resolution_clock::time_point t1 = chrono::high_resolution_clock::now();
 
 	// error checking 
-	//if (clipLimit == 1.0) return 0;				// return original image
 	if (numSB.x > _maxNumCR_X) return 0;				// # of x SubBlocks too large
 	if (numSB.y > _maxNumCR_Y) return 0;				// # of y SubBlocks too large
 	//if (numSB.z > _maxNumCR_Z) return -3;			// # of z SubBlocks too large
-	if (numBins == 0) numBins = NUM_IN_GRAY_VALS;	// default value when not specified
+	if (numBins == 0) numBins = NUM_IN_GRAY_VALS;		// default value when not specified
+	// make sure the clip limit is valid
+	clipLimit = std::max(std::min(clipLimit, _maxClipLimit), _minClipLimit);
+
+	printf("clipLimit: %f, numSubBlocks: (%u, %u, %u)\n", clipLimit, numSB.x, numSB.y, numSB.z);
 
 	// get the data from the image 
 	uint16_t* volumeData = new uint16_t[_imgDimX * _imgDimY * _imgDimZ];
@@ -801,17 +804,15 @@ int CLAHE::CLAHE_3D(glm::uvec3 numSB, unsigned int numBins, float clipLimit) {
 	// perform CLAHE on that volume data 
 	clahe3D(volumeData, glm::uvec3(_imgDimX, _imgDimY, _imgDimZ), numSB, numBins, clipLimit);
 
-
-	// store the new data as a texture 
+	// store the new volume data as a texture 
 	GLuint textureID = initTexture3D(_imgDimX, _imgDimY, _imgDimZ, GL_R16, GL_RED, GL_UNSIGNED_SHORT, GL_LINEAR, volumeData);
-	//GLuint textureID = initTexture3D(_imgDimX, _imgDimY, _imgDimZ, GL_R16UI, GL_RED_INTEGER, GL_UNSIGNED_SHORT, GL_LINEAR, volumeData);
 
 	std::cerr << "new TextureID: " << textureID << endl;
 
 	chrono::high_resolution_clock::time_point t2 = chrono::high_resolution_clock::now();
 	chrono::duration<double> time_span = chrono::duration_cast<chrono::duration<double>>(t2 - t1);
 
-	std::cerr << "\n3D CLAHE took: " << time_span.count() << " seconds.\n";
+	std::cerr << "\n3D CLAHE took: " << time_span.count() << " seconds.\n\n";
 
 	return textureID;
 }
@@ -846,11 +847,16 @@ int CLAHE::Focused_CLAHE_3D(glm::uvec3 min, glm::uvec3 max, unsigned int numBins
 			}
 		}
 	}
-
+	_minVal = minVal;
+	_maxVal = maxVal;
 	// Determine the number of SB
 	unsigned int numSBx = std::max((int)(xDim / 100), 1);
 	unsigned int numSBy = std::max((int)(yDim / 100), 1);
 	unsigned int numSBz = std::max((int)(zDim / 100), 1);
+
+	// make sure the clip limit is valid
+	clipLimit = std::max(std::min(clipLimit, _maxClipLimit), _minClipLimit);
+
 
 	// perform CLAHE on the selected region
 	printf("\n----- Focused 3D CLAHE -----\n");	
@@ -872,7 +878,7 @@ int CLAHE::Focused_CLAHE_3D(glm::uvec3 min, glm::uvec3 max, unsigned int numBins
 	chrono::high_resolution_clock::time_point t2 = chrono::high_resolution_clock::now();
 	chrono::duration<double> time_span = chrono::duration_cast<chrono::duration<double>>(t2 - t1);
 
-	std::cerr << "\nFocused 3D CLAHE took: " << time_span.count() << " seconds.\n";
+	std::cerr << "\nFocused 3D CLAHE took: " << time_span.count() << " seconds.\n\n";
 
 	return initTexture3D(_imgDimX, _imgDimY, _imgDimZ, GL_R16, GL_RED, GL_UNSIGNED_SHORT, GL_LINEAR, volumeData);
 	//return initTexture3D(xDim, yDim, zDim, GL_R16, GL_RED, GL_UNSIGNED_SHORT, GL_LINEAR, subVolumeData);

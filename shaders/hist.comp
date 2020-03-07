@@ -37,6 +37,7 @@ void main() {
 	ivec3 sizeSB = ivec3( volumeDims / numSB );	
 	ivec3 currSB = ivec3( index / sizeSB );
 
+	// if we are not within the volume of interest -> return 
 	if ( index.x >= volumeDims.x || index.y >= volumeDims.y || index.z >= volumeDims.z ) {
 		return;
 	}

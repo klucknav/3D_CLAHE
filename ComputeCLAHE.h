@@ -12,42 +12,39 @@ private:
 
 	// compute shaders
 	GLuint _minMaxShader, _LUTshader;
-	GLuint _histShader, _excessShader, _clipShader1, _clipShader2;
+	GLuint _histShader, _excessShader, _clipShaderPass1, _clipShaderPass2;
 	GLuint _lerpShader, _focusedLerpShader;
 
 	// volume data 
 	GLuint _volumeTexture;
-	glm::vec3 _volDims;
+	glm::ivec3 _volDims;
 	unsigned int _numFinalGrayVals;
 	unsigned int _numInGrayVals;
 
-	// CLAHE Data
-	bool _useLUT = true;
-
-	// calculated data
-	uint32_t _globalMinMax[2];
-	GLuint _newVolumeBuffer;
-	GLuint _newVolumeTexture;
-
-	// buffers 
-	GLuint _globalMinMaxBuffer, _LUTbuffer, _histBuffer;
-	GLuint _histMaxBuffer, _excessBuffer;
+	// CLAHE Buffers and Data
+	GLuint _LUTbuffer, _histBuffer, _histMaxBuffer;
 	GLuint _layer = 1;
+	bool _useLUT;
+	float _minClipLimit = 0.1f;
+	float _maxClipLimit = 1.0f;
+	int _pixelPerSB = 100;
 
 	// CLAHE Compute Shader Functions
-	void computeMinMax(glm::uvec3 volDims, glm::uvec3 offset = glm::uvec3(0));
-	void computeLUT();
+	void computeLUT(glm::uvec3 volDims, uint32_t* minMax, glm::uvec3 offset = glm::uvec3(0));
 	void computeHist(glm::uvec3 volDims, glm::uvec3 numSB, glm::uvec3 offset = glm::uvec3(0));
-	void computeClipHist(glm::uvec3 volDims, glm::uvec3 numSB, float clipLimit);
+	void computeClipHist(glm::uvec3 volDims, glm::uvec3 numSB, float clipLimit, uint32_t* minMax);
 	GLuint computeLerp(glm::uvec3 volDims, glm::uvec3 numSB, glm::uvec3 offset = glm::uvec3(0));
 	GLuint computeFocusedLerp(glm::uvec3 volDims, glm::uvec3 numSB, glm::uvec3 minVal, glm::vec3 maxVal);
 
 public:
-	ComputeCLAHE(GLuint volumeTexture, glm::vec3 volDims, unsigned int numFinalGrayVals, unsigned int numInGrayVals);
+	ComputeCLAHE() {};
+	ComputeCLAHE(GLuint volumeTexture, glm::ivec3 volDims, unsigned int finalGrayVals, unsigned int inGrayVals);
 	~ComputeCLAHE();
+
+	void Init(GLuint volumeTexture, glm::ivec3 volDims, unsigned int finalGrayVals, unsigned int inGrayVals);
 
 	// CLAHE Methods
 	GLuint Compute3D_CLAHE(glm::uvec3 numSB, float clipLimit);
-	GLuint ComputeFocused3D_CLAHE(glm::uvec3 min, glm::uvec3 max, float clipLimit);
+	GLuint ComputeFocused3D_CLAHE(glm::ivec3 min, glm::ivec3 max, float clipLimit);
 
 };

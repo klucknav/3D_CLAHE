@@ -23,6 +23,9 @@ private:
 	const unsigned int _maxNumCR_X = 16;
 	const unsigned int _maxNumCR_Y = 16;
 	const unsigned int _maxNumCR_Z = 16;
+	float _minClipLimit = 0.1f;
+	float _maxClipLimit = 1.0f;
+
 
 	// Image/Volume Properties 
 	uint16_t* _imageData;
