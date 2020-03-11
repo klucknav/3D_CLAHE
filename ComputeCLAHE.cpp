@@ -119,20 +119,28 @@ GLuint ComputeCLAHE::ComputeFocused3D_CLAHE(glm::ivec3 min, glm::ivec3 max, floa
 	max.x = std::min(max.x, _volDims.x);
 	max.y = std::min(max.y, _volDims.y);
 	max.z = std::min(max.z, _volDims.z);
+
 	printf("x range: [%d, %d], y range: [%d, %d], z range: [%d, %d]\n", min.x, max.x, min.y, max.y, min.z, max.z);
 
 	// Determine the number of SB
 	glm::ivec3 focusedDim = max - min;
-	if (focusedDim.x < 0 || focusedDim.y < 0 || focusedDim.z < 0) {
+	if (focusedDim.x < _minPixels.x || focusedDim.y < _minPixels.y || focusedDim.z < _minPixels.z) {
 		printf("Focused Region too Small\n");
-		return _volumeTexture;
+		return 0;
 	}
-	unsigned int numSBx = std::max((focusedDim.x / _pixelPerSB), 1);
-	unsigned int numSBy = std::max((focusedDim.y / _pixelPerSB), 1);
-	unsigned int numSBz = std::max((focusedDim.z / _pixelPerSB), 1);
+	unsigned int numSBx = std::max((focusedDim.x / _pixelRatio.x), 1);
+	unsigned int numSBy = std::max((focusedDim.y / _pixelRatio.y), 1);
+	unsigned int numSBz = std::max((focusedDim.z / _pixelRatio.z), 1);
+	//unsigned int numSBx = std::max((focusedDim.x / _pixelPerSB), 1);
+	//unsigned int numSBy = std::max((focusedDim.y / _pixelPerSB), 1);
+	//unsigned int numSBz = std::max((focusedDim.z / _pixelPerSB), 1);
 	glm::uvec3 numSB = glm::uvec3(numSBx, numSBy, numSBz);
 
 	// make sure the clip limit is valid
+	if (clipLimit < _minClipLimit || clipLimit > _maxClipLimit) {
+		printf("ClipLimit out of bounds (%.3f)\n", clipLimit);
+		return 0;
+	}
 	clipLimit = std::max(std::min(clipLimit, _maxClipLimit), _minClipLimit);
 	printf("clipLimit: %.2f, numSubBlocks(%u, %u, %u)\n", clipLimit, numSB.x, numSB.y, numSB.z);
 
@@ -513,4 +521,31 @@ void mapHistogram(uint32_t minVal, uint32_t maxVal, uint32_t numPixelsSB, uint32
 	}
 }
 
+////////////////////////////////////////////////////////////////////////////////
+// Helper Methods - Interaction
+
+bool ComputeCLAHE::ChangePixelsPerSB(bool decrease) {
+
+	if (decrease) {
+		if (_pixelRatio == _minPixels) {
+			printf("Pixel Ratio already smallest\n");
+			return false;
+		}
+		_pixelRatio -= _minPixels;
+	}
+	else {
+		if (_pixelRatio.x > _volDims.x&& _pixelRatio.y > _volDims.y&& _pixelRatio.z > _volDims.z) {
+			printf("Pixel Ratio already largest\n");
+			return false;
+		}
+		_pixelRatio += _minPixels;
+	}
+
+	_pixelRatio.x = std::max(_minPixels.x, _pixelRatio.x);
+	_pixelRatio.y = std::max(_minPixels.y, _pixelRatio.y);
+	_pixelRatio.z = std::max(_minPixels.z, _pixelRatio.z);
+
+	printf("Pixel Ratio: %d, %d, %d\n", _pixelRatio.x, _pixelRatio.y, _pixelRatio.z);
+	return true;
+}
 ////////////////////////////////////////////////////////////////////////////////

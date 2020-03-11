@@ -37,7 +37,7 @@ void main() {
 	uvec3 index = gl_GlobalInvocationID.xyz;
 	ivec3 volumeDims = imageSize(volume);
 
-	if (index.x >= minVal.x && index.y >= minVal.y && index.z >= minVal.z && index.x < maxVal.x  && index.y < maxVal.y && index.z < maxVal.z) {
+	if (index.x > minVal.x && index.y > minVal.y && index.z > minVal.z && index.x < maxVal.x  && index.y < maxVal.y && index.z < maxVal.z) {
 
 		// number of blocks to interpolate over is 2x number of SB the volume is divided into
 		ivec3 numBlocks = numSB * ivec3(2);	

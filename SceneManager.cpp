@@ -35,6 +35,7 @@ GLuint _testVolume;
 ComputeCLAHE comp;
 glm::uvec3 min3D = glm::uvec3(200, 200, 40);
 glm::uvec3 max3D = glm::uvec3(400, 400, 90);
+float clipLimit3D = 0.85f;
 
 enum class TextureMode {
 	_RAW,
@@ -43,6 +44,12 @@ enum class TextureMode {
 	_TEST
 };
 TextureMode _textureMode;
+
+enum class InteractionMode {
+	_MOVE, 
+	_CHANGE
+};
+InteractionMode _interactionMode;
 
 // Shader Variables
 GLuint SceneManager::_volumeShader;
@@ -151,7 +158,7 @@ void SceneManager::InitScene() {
 	glm::uvec3 numSB = glm::uvec3(4, 4, 2);
 	unsigned int finalGrayVals_3D = 65536;
 	unsigned int ogGrayVals_3D = 65536;
-	float clipLimit3D = 1.5f;
+	//float clipLimit3D = 1.5f;
 	
 	CLAHE* _volumeTest = new CLAHE(_dicomVolume);
 
@@ -177,6 +184,7 @@ void SceneManager::InitScene() {
 	////////////////////////////////////////////////////////////////////////////
 
 	_textureMode = TextureMode::_RAW;
+	_interactionMode = InteractionMode::_MOVE;
 }
 
 void SceneManager::ClearScene() {
@@ -260,7 +268,8 @@ void SceneManager::Draw() {
 void SceneManager::KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
 
 	glm::uvec3 step = glm::uvec3(20, 20, 10);
-	float clip = 0.95f;
+	//float clip = 0.95f;
+	GLuint newTexture = 0;
 
 	if (action == GLFW_PRESS) {
 		switch (key) {
@@ -294,41 +303,124 @@ void SceneManager::KeyCallback(GLFWwindow* window, int key, int scancode, int ac
 				_textureMode = TextureMode::_TEST;
 				break;
 
-			// Move the Focused region around
-			case GLFW_KEY_X:
-				if (mods == GLFW_MOD_SHIFT) {
-					min3D += glm::uvec3(step.x, 0, 0);
-					max3D += glm::uvec3(step.x, 0, 0);
+			// Change Interaction Mode
+			case GLFW_KEY_M:
+				if (_interactionMode == InteractionMode::_MOVE) {
+					_interactionMode = InteractionMode::_CHANGE;
+					printf("Interaction Mode: CHANGE BLOCK DIMENSIONS\n");
 				}
 				else {
-					min3D -= glm::uvec3(step.x, 0, 0);
-					max3D -= glm::uvec3(step.x, 0, 0);
+					_interactionMode = InteractionMode::_MOVE;
+					printf("Interaction Mode: MOVE BLOCK\n");
 				}
-				_focusedDicomVolumeTexture = comp.ComputeFocused3D_CLAHE(min3D, max3D, clip);
+				break;
+
+			// Increase/Decrease the CLip Limit 
+			case GLFW_KEY_EQUAL:
+				if (mods == GLFW_MOD_SHIFT) {
+					clipLimit3D += 0.1;
+				}				
+				newTexture = comp.ComputeFocused3D_CLAHE(min3D, max3D, clipLimit3D);
+				if (newTexture != 0)
+					_focusedDicomVolumeTexture = newTexture;
+				break;
+			case GLFW_KEY_MINUS:
+				clipLimit3D -= 0.1;
+				newTexture = comp.ComputeFocused3D_CLAHE(min3D, max3D, clipLimit3D);
+				if (newTexture != 0)
+					_focusedDicomVolumeTexture = newTexture;
+				break;
+
+			// Increase/Decrease the number of SB
+			case GLFW_KEY_P:
+				bool result;
+				if (mods == GLFW_MOD_SHIFT) {
+					result = comp.ChangePixelsPerSB(false);
+				}
+				else {
+					result = comp.ChangePixelsPerSB(true);
+				}
+				if (result) {
+					_focusedDicomVolumeTexture = comp.ComputeFocused3D_CLAHE(min3D, max3D, clipLimit3D);
+				}
+				break;
+
+			// Move/Change the Focused Region 
+			case GLFW_KEY_X:
+				if (mods == GLFW_MOD_SHIFT) {
+					if (_interactionMode == InteractionMode::_MOVE) {
+						min3D += glm::uvec3(step.x, 0, 0);
+						max3D += glm::uvec3(step.x, 0, 0);
+					}
+					else if(_interactionMode == InteractionMode::_CHANGE) {
+						min3D -= glm::uvec3(step.x, 0, 0);
+						max3D += glm::uvec3(step.x, 0, 0);
+					}
+				}
+				else {
+					if (_interactionMode == InteractionMode::_MOVE) {
+						min3D -= glm::uvec3(step.x, 0, 0);
+						max3D -= glm::uvec3(step.x, 0, 0);
+					}
+					else if (_interactionMode == InteractionMode::_CHANGE) {
+						min3D += glm::uvec3(step.x, 0, 0);
+						max3D -= glm::uvec3(step.x, 0, 0);
+					}
+				}
+				newTexture = comp.ComputeFocused3D_CLAHE(min3D, max3D, clipLimit3D);
+				if (newTexture != 0)
+					_focusedDicomVolumeTexture = newTexture;
 				break;
 			case GLFW_KEY_Y:
 				if (mods == GLFW_MOD_SHIFT) {
-					min3D += glm::uvec3(0, step.y, 0);
-					max3D += glm::uvec3(0, step.y, 0);
+					if (_interactionMode == InteractionMode::_MOVE) {
+						min3D += glm::uvec3(0, step.y, 0);
+						max3D += glm::uvec3(0, step.y, 0);
+					}
+					else if (_interactionMode == InteractionMode::_CHANGE) {
+						min3D -= glm::uvec3(0, step.y, 0);
+						max3D += glm::uvec3(0, step.y, 0);
+					}
 				}
 				else {
-					min3D -= glm::uvec3(0, step.y, 0);
-					max3D -= glm::uvec3(0, step.y, 0);
+					if (_interactionMode == InteractionMode::_MOVE) {
+						min3D -= glm::uvec3(0, step.y, 0);
+						max3D -= glm::uvec3(0, step.y, 0);
+					}
+					else if (_interactionMode == InteractionMode::_CHANGE) {
+						min3D += glm::uvec3(0, step.y, 0);
+						max3D -= glm::uvec3(0, step.y, 0);
+					}
 				}
-				_focusedDicomVolumeTexture = comp.ComputeFocused3D_CLAHE(min3D, max3D, clip);
+				newTexture = comp.ComputeFocused3D_CLAHE(min3D, max3D, clipLimit3D);
+				if (newTexture != 0)
+					_focusedDicomVolumeTexture = newTexture;
 				break;
 			case GLFW_KEY_Z:
 				if (mods == GLFW_MOD_SHIFT) {
-					min3D += glm::uvec3(0, 0, step.z);
-					max3D += glm::uvec3(0, 0, step.z);
+					if (_interactionMode == InteractionMode::_MOVE) {
+						min3D += glm::uvec3(0, 0, step.z);
+						max3D += glm::uvec3(0, 0, step.z);
+					}
+					else if (_interactionMode == InteractionMode::_CHANGE) {
+						min3D -= glm::uvec3(0, 0, step.z);
+						max3D += glm::uvec3(0, 0, step.z);
+					}
 				}
 				else {
-					min3D -= glm::uvec3(0, 0, step.z);
-					max3D -= glm::uvec3(0, 0, step.z);
+					if (_interactionMode == InteractionMode::_MOVE) {
+						min3D -= glm::uvec3(0, 0, step.z);
+						max3D -= glm::uvec3(0, 0, step.z);
+					}
+					else if (_interactionMode == InteractionMode::_CHANGE) {
+						min3D += glm::uvec3(0, 0, step.z);
+						max3D -= glm::uvec3(0, 0, step.z);
+					}
 				}
-				_focusedDicomVolumeTexture = comp.ComputeFocused3D_CLAHE(min3D, max3D, clip);
+				newTexture = comp.ComputeFocused3D_CLAHE(min3D, max3D, clipLimit3D);
+				if (newTexture != 0)
+					_focusedDicomVolumeTexture = newTexture;
 				break;
-
 		}
 	}
 }
