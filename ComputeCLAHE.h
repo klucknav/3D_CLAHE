@@ -16,7 +16,7 @@ private:
 	GLuint _lerpShader, _focusedLerpShader;
 
 	// volume data 
-	GLuint _volumeTexture;
+	GLuint _volumeTexture, _maskTexture;
 	glm::ivec3 _volDims;
 	unsigned int _numFinalGrayVals;
 	unsigned int _numInGrayVals;
@@ -34,10 +34,10 @@ private:
 	glm::ivec3 _minPixels = glm::ivec3(50, 50, 25);
 
 	// CLAHE Compute Shader Functions
-	void computeLUT(glm::uvec3 volDims, uint32_t* minMax, glm::uvec3 offset = glm::uvec3(0));
-	void computeHist(glm::uvec3 volDims, glm::uvec3 numSB, glm::uvec3 offset = glm::uvec3(0));
-	void computeClipHist(glm::uvec3 volDims, glm::uvec3 numSB, float clipLimit, uint32_t* minMax);
-	GLuint computeLerp(glm::uvec3 volDims, glm::uvec3 numSB, glm::uvec3 offset = glm::uvec3(0));
+	uint32_t computeLUT(glm::uvec3 volDims, uint32_t* minMax, bool useMask=false, glm::uvec3 offset = glm::uvec3(0));
+	void computeHist(glm::uvec3 volDims, glm::uvec3 numSB, bool useMask = false, glm::uvec3 offset = glm::uvec3(0));
+	void computeClipHist(glm::uvec3 volDims, glm::uvec3 numSB, float clipLimit, uint32_t* minMax, int numPixels=-1);
+	GLuint computeLerp(GLuint& maskedVersion, glm::uvec3 volDims, glm::uvec3 numSB, bool useMask=false, glm::uvec3 offset = glm::uvec3(0));
 	GLuint computeFocusedLerp(glm::uvec3 volDims, glm::uvec3 numSB, glm::uvec3 minVal, glm::vec3 maxVal);
 
 public:
@@ -45,10 +45,10 @@ public:
 	ComputeCLAHE(GLuint volumeTexture, glm::ivec3 volDims, unsigned int finalGrayVals, unsigned int inGrayVals);
 	~ComputeCLAHE();
 
-	void Init(GLuint volumeTexture, glm::ivec3 volDims, unsigned int finalGrayVals, unsigned int inGrayVals);
+	void Init(GLuint volumeTexture, GLuint maskTexture, glm::ivec3 volDims, unsigned int finalGrayVals, unsigned int inGrayVals);
 
 	// CLAHE Methods
-	GLuint Compute3D_CLAHE(glm::uvec3 numSB, float clipLimit);
+	GLuint Compute3D_CLAHE(GLuint& maskedVersion, glm::uvec3 numSB, float clipLimit, bool useMask=false);
 	GLuint ComputeFocused3D_CLAHE(glm::ivec3 min, glm::ivec3 max, float clipLimit);
 
 	// Change parameters for Focused CLAHE

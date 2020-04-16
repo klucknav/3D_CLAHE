@@ -55,13 +55,20 @@ Cube::~Cube() {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-void Cube::Draw(GLuint shader, const glm::mat4& VPMatrix, const glm::vec3& CamPos, GLuint texture) {
+void Cube::Draw(GLuint shader, const glm::mat4& VPMatrix, const glm::vec3& CamPos, 
+				GLuint texture, GLuint maskTexture, bool useMask) {
 
 	glUseProgram(shader);
 
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_3D, texture);
 	glUniform1i(glGetUniformLocation(shader, "Volume"), 0);
+
+	//glActiveTexture(GL_TEXTURE1);
+	//glBindTexture(GL_TEXTURE_3D, maskTexture);
+	//glUniform1i(glGetUniformLocation(shader, "Mask"), 1);
+	glBindImageTexture(1, maskTexture, 0, GL_TRUE, 1, GL_READ_ONLY, GL_R8UI);
+	glUniform1i(glGetUniformLocation(shader, "useMask"), useMask);
 
 	glUniformMatrix4fv(glGetUniformLocation(shader, "MVP"), 1, GL_FALSE, (float*)&VPMatrix);
 	glUniform3f(glGetUniformLocation(shader, "CameraPosition"), CamPos.x, CamPos.y, CamPos.z);

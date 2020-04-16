@@ -15,6 +15,9 @@
 #include <thread>
 #include <algorithm>
 
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb-master/stb_image.h>
+
 #include "ImageLoader.h"
 
 using namespace std;
@@ -321,12 +324,52 @@ GLuint ImageLoader::loadVolume() {
 		return 0;
 }
 
+GLuint ImageLoader::loadMask() {
+
+	std::cerr << "Loading Mask Folder\n";
+
+#ifdef  WIN32
+	if (!PathFileExists(_maskPath.c_str())) {
+#endif 
+		printf("%s Does not exist!\n\n", _maskPath.c_str());
+		return 0;
+	}
+
+	// get the mask files in sorted order 
+	vector<string> files;
+	GetFiles(_maskPath, files);
+	std::sort(files.data(), files.data() + files.size(), [](const string& a, const string& b) {
+		return atoi(GetName(a).c_str()) > atoi(GetName(b).c_str());
+	});
+
+	int width, height, channel;
+	unsigned char* maskData = new unsigned char[_imgDims.x * _imgDims.y * _imgDims.z];
+	memset(maskData, 0, _imgDims.x * _imgDims.y * _imgDims.z * sizeof(unsigned char));
+	for (int currSlice = 0; currSlice < files.size(); currSlice++) {
+
+		//stbi_set_flip_vertically_on_load(true);
+		unsigned char* pixelData = stbi_load(files.at(currSlice).c_str(), &width, &height, &channel, STBI_grey);
+		
+		unsigned char* slice = maskData + (currSlice * _imgDims.x * _imgDims.y);
+		memcpy(slice, pixelData, sizeof(unsigned char) * _imgDims.x * _imgDims.y);
+
+		stbi_image_free(pixelData);
+	}
+
+	// make volume texture for the mask data 
+	
+	GLuint tex = InitTexture3D(_imgDims.x, _imgDims.y, _imgDims.z, GL_R8, GL_RED, GL_UNSIGNED_BYTE, GL_LINEAR, maskData);
+	printf("Masks loaded: (%d) - (%d, %d, %d)\n\n", tex, _imgDims.x, _imgDims.y, _imgDims.z);
+	delete[] maskData;
+	return tex;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // Constructor/Destructor
 
-ImageLoader::ImageLoader(string& path, bool isImg) {
+ImageLoader::ImageLoader(string& path, string& maskpath, bool isImg) {
 
-	_path = path;
+	_path = path;	_maskPath = maskpath;
 
 	if (isImg) {
 		cerr << "Load Image\n";
@@ -335,6 +378,7 @@ ImageLoader::ImageLoader(string& path, bool isImg) {
 	else {
 		cerr << "Load Volume\n";
 		_textureID = loadVolume();
+		_maskID = loadMask();
 	}
 }
 

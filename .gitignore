@@ -9,6 +9,7 @@ glew
 glew-2.1.0
 glfw
 glm
+stb-master
 
 // CMake 
 CMakeSettings.json
@@ -23,4 +24,5 @@ CTestTestfile.cmake
 
 // DICOM files
 Larry
+Larry_2017
 dicom

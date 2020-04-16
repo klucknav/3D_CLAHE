@@ -39,7 +39,7 @@ ComputeCLAHE::ComputeCLAHE(GLuint volumeTexture, glm::ivec3 volDims, unsigned in
 	printf("useLUT: %s\n", _useLUT ? "true" : "false");
 }
 
-void ComputeCLAHE::Init(GLuint volumeTexture, glm::ivec3 volDims, unsigned int finalGrayVals, unsigned int inGrayVals) {
+void ComputeCLAHE::Init(GLuint volumeTexture, GLuint maskTexture, glm::ivec3 volDims, unsigned int finalGrayVals, unsigned int inGrayVals) {
 	
 	// Load Shaders
 	_minMaxShader = LoadComputeShader("minMax.comp");
@@ -56,6 +56,7 @@ void ComputeCLAHE::Init(GLuint volumeTexture, glm::ivec3 volDims, unsigned int f
 	_volDims = volDims;
 	_numFinalGrayVals = finalGrayVals;
 	_numInGrayVals = inGrayVals;
+	_maskTexture = maskTexture;
 
 	// if the number of gray values is changing --> use the LUT
 	_useLUT = (_numFinalGrayVals != _numInGrayVals);
@@ -75,7 +76,7 @@ ComputeCLAHE::~ComputeCLAHE() {
 ////////////////////////////////////////////////////////////////////////////////
 // CLAHE Functions
 
-GLuint ComputeCLAHE::Compute3D_CLAHE(glm::uvec3 numSB, float clipLimit) {
+GLuint ComputeCLAHE::Compute3D_CLAHE(GLuint& maskedVersion, glm::uvec3 numSB, float clipLimit, bool useMask) {
 
 	printf("\n----- Compute 3D CLAHE -----\n");
 	printf("using (%u, %u, %u) subBlocks\n", numSB.x, numSB.y, numSB.z);
@@ -88,15 +89,22 @@ GLuint ComputeCLAHE::Compute3D_CLAHE(glm::uvec3 numSB, float clipLimit) {
 
 	// Create the LUT
 	uint32_t minMax[2] = { _numInGrayVals, 0 };
-	computeLUT(_volDims, minMax);
+	uint32_t numPixels = computeLUT(_volDims, minMax, useMask);
 	printf("Min/max: (%d, %d)\n", minMax[0], minMax[1]);
 
-	// Create the Histograms
-	computeHist(_volDims, numSB);
-	computeClipHist(_volDims, numSB, clipLimit, minMax);
+	// Create the Histogram
+	if (useMask) {
+		numSB = glm::uvec3(1, 1, 1);
+		computeHist(_volDims, numSB, useMask);
+		computeClipHist(_volDims, numSB, clipLimit, minMax, numPixels);
+	}
+	else {
+		computeHist(_volDims, numSB, useMask);
+		computeClipHist(_volDims, numSB, clipLimit, minMax);
+	}
 
 	// Interpolate to re-create the new texture
-	GLuint newTexture = computeLerp(_volDims, numSB);
+	GLuint newTexture = computeLerp(maskedVersion, _volDims, numSB, useMask);
 
 	chrono::high_resolution_clock::time_point t2 = chrono::high_resolution_clock::now();
 	chrono::duration<double> time_span = chrono::duration_cast<chrono::duration<double>>(t2 - t1);
@@ -144,14 +152,14 @@ GLuint ComputeCLAHE::ComputeFocused3D_CLAHE(glm::ivec3 min, glm::ivec3 max, floa
 	clipLimit = std::max(std::min(clipLimit, _maxClipLimit), _minClipLimit);
 	printf("clipLimit: %.2f, numSubBlocks(%u, %u, %u)\n", clipLimit, numSB.x, numSB.y, numSB.z);
 
-
+	bool useMask = false;
 	// Create the LUT
 	uint32_t minMax[2] = { _numInGrayVals, 0 };
-	computeLUT(focusedDim, minMax, min);
+	computeLUT(focusedDim, minMax, useMask, min);
 	printf("Min/max: (%d, %d)\n", minMax[0], minMax[1]);
 
 	// Creat the Histograms
-	computeHist(focusedDim, numSB, min);
+	computeHist(focusedDim, numSB, useMask, min);
 	computeClipHist(focusedDim, numSB, clipLimit, minMax);
 
 	// Interpolate to re-create the new texture
@@ -167,7 +175,7 @@ GLuint ComputeCLAHE::ComputeFocused3D_CLAHE(glm::ivec3 min, glm::ivec3 max, floa
 ////////////////////////////////////////////////////////////////////////////////
 // CLAHE Compute Shader Functions
 
-void ComputeCLAHE::computeLUT(glm::uvec3 volDims, uint32_t* minMax, glm::uvec3 offset) {
+uint32_t ComputeCLAHE::computeLUT(glm::uvec3 volDims, uint32_t* minMax, bool useMask, glm::uvec3 offset) {
 
 	printf("LUT...");
 
@@ -181,13 +189,24 @@ void ComputeCLAHE::computeLUT(glm::uvec3 volDims, uint32_t* minMax, glm::uvec3 o
 	glBufferData(GL_SHADER_STORAGE_BUFFER, 2 * sizeof(uint32_t), minMax, GL_STREAM_READ);
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 
+	// buffer to count the number of pixels that are not masked
+	GLuint unMaskedPixelBuffer;
+	uint32_t numUnMaskedPixels = 0;
+	glGenBuffers(1, &unMaskedPixelBuffer);
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, unMaskedPixelBuffer);
+	glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(uint32_t), &numUnMaskedPixels, GL_STREAM_READ);
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+
 	// Set up Compute Shader 
 	glUseProgram(_minMaxShader);
 	glBindImageTexture(0, _volumeTexture, 0, GL_TRUE, _layer, GL_READ_ONLY, GL_R16UI);
-	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, globalMinMaxBuffer);
+	glBindImageTexture(1, _maskTexture, 0, GL_TRUE, _layer, GL_READ_ONLY, GL_R8UI);
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, globalMinMaxBuffer);
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, unMaskedPixelBuffer);
 	glUniform1ui(glGetUniformLocation(_minMaxShader, "NUM_BINS"), _numInGrayVals);
 	glUniform3ui(glGetUniformLocation(_minMaxShader, "offset"), offset.x, offset.y, offset.z);
 	glUniform3ui(glGetUniformLocation(_minMaxShader, "volumeDims"), volDims.x, volDims.y, volDims.z);
+	glUniform1i(glGetUniformLocation(_minMaxShader, "useMask"), useMask);
 
 	glDispatchCompute(	(GLuint)((volDims.x + 3) / 4),
 						(GLuint)((volDims.y + 3) / 4),
@@ -205,6 +224,13 @@ void ComputeCLAHE::computeLUT(glm::uvec3 volDims, uint32_t* minMax, glm::uvec3 o
 
 	minMax[0] = data[0], minMax[1] = data[1];
 
+	glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
+
+	// Get the num Pixels in the masked region
+	uint32_t* pixelCount = new uint32_t;
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, unMaskedPixelBuffer);
+	pixelCount = (uint32_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
+	fprintf(stderr, "\n\nTESTING: %d \n\n", *pixelCount);
 	glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
 
 	glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_CLIENT_MAPPED_BUFFER_BARRIER_BIT);
@@ -233,12 +259,12 @@ void ComputeCLAHE::computeLUT(glm::uvec3 volDims, uint32_t* minMax, glm::uvec3 o
 	}
 	// clean up
 	glDeleteBuffers(1, &globalMinMaxBuffer);
-
+	return *pixelCount;
 }
 
-void ComputeCLAHE::computeHist(glm::uvec3 volDims, glm::uvec3 numSB, glm::uvec3 offset) {
+void ComputeCLAHE::computeHist(glm::uvec3 volDims, glm::uvec3 numSB, bool useMask, glm::uvec3 offset) {
 
-	printf("\nCompute Hist...");
+	printf("\nCompute Hist... (%d, %d, %d) ", numSB.x, numSB.y, numSB.z);
 
 	// Buffer to store the Histograms
 	uint32_t histSize = _numInGrayVals * numSB.x * numSB.y * numSB.z;
@@ -260,14 +286,16 @@ void ComputeCLAHE::computeHist(glm::uvec3 volDims, glm::uvec3 numSB, glm::uvec3 
 	// Set up Compute Shader 
 	glUseProgram(_histShader);
 	glBindImageTexture(0, _volumeTexture, 0, GL_TRUE, _layer, GL_READ_ONLY, GL_R16UI);
-	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, _LUTbuffer);
-	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, _histBuffer);
-	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, _histMaxBuffer);
-	glUniform3i(glGetUniformLocation(_histShader, "numSB"), numSB.x, numSB.y, numSB.z);	
+	glBindImageTexture(1, _maskTexture, 0, GL_TRUE, _layer, GL_READ_ONLY, GL_R8UI);
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, _LUTbuffer);
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, _histBuffer);
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, _histMaxBuffer);
+	glUniform3i(glGetUniformLocation(_histShader, "numSB"), numSB.x, numSB.y, numSB.z);
 	glUniform1ui(glGetUniformLocation(_histShader, "NUM_BINS"), _numInGrayVals);
 	glUniform3ui(glGetUniformLocation(_histShader, "offset"), offset.x, offset.y, offset.z);
 	glUniform1i(glGetUniformLocation(_histShader, "useLUT"), _useLUT);
 	glUniform3ui(glGetUniformLocation(_histShader, "volumeDims"), volDims.x, volDims.y, volDims.z);
+	glUniform1i(glGetUniformLocation(_minMaxShader, "useMask"), useMask);
 
 	glDispatchCompute(	(GLuint)((volDims.x + 3) / 4),
 						(GLuint)((volDims.y + 3) / 4),
@@ -278,7 +306,7 @@ void ComputeCLAHE::computeHist(glm::uvec3 volDims, glm::uvec3 numSB, glm::uvec3 
 	glUseProgram(0);
 }
 
-void ComputeCLAHE::computeClipHist(glm::uvec3 volDims, glm::uvec3 numSB, float clipLimit, uint32_t* minMax) {
+void ComputeCLAHE::computeClipHist(glm::uvec3 volDims, glm::uvec3 numSB, float clipLimit, uint32_t* minMax, int numPixels) {
 
 	uint32_t histSize = _numInGrayVals * numSB.x * numSB.y * numSB.z;
 	uint32_t numHistograms = numSB.x * numSB.y * numSB.z;
@@ -394,8 +422,15 @@ void ComputeCLAHE::computeClipHist(glm::uvec3 volDims, glm::uvec3 numSB, float c
 	// Map the histograms 
 	// - calculate the CDF for each of the histograms and store it in hist
 
-	glm::vec3 sizeSB = volDims / numSB;
-	unsigned int numPixelsSB = sizeSB.x * sizeSB.y * sizeSB.z;
+	unsigned int numPixelsSB;
+	if (numPixels == -1) {
+		glm::vec3 sizeSB = volDims / numSB;
+		numPixelsSB = sizeSB.x * sizeSB.y * sizeSB.z;
+	}
+	else {
+		numPixelsSB = numPixels;
+	}
+	// TODO if masked then this is the incorrect value to use
 
 	std::vector<std::thread> threads;
 
@@ -418,9 +453,9 @@ void ComputeCLAHE::computeClipHist(glm::uvec3 volDims, glm::uvec3 numSB, float c
 	printf("\n");
 }
 
-GLuint ComputeCLAHE::computeLerp(glm::uvec3 volDims, glm::uvec3 numSB, glm::uvec3 offset) {
+GLuint ComputeCLAHE::computeLerp(GLuint& maskedVersion, glm::uvec3 volDims, glm::uvec3 numSB, bool useMask, glm::uvec3 offset) {
 
-	printf("lerp...");
+	printf("lerp... (%d, %d, %d) ", numSB.x, numSB.y, numSB.z);
 
 	// generate the new volume texture
 	GLuint newVolumeTexture;
@@ -438,13 +473,15 @@ GLuint ComputeCLAHE::computeLerp(glm::uvec3 volDims, glm::uvec3 numSB, glm::uvec
 	// Set up Compute Shader 
 	glUseProgram(_lerpShader);
 	glBindImageTexture(0, _volumeTexture, 0, GL_TRUE, _layer, GL_READ_ONLY, GL_R16UI);
-	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, _LUTbuffer);
-	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, _histBuffer);
-	glBindImageTexture(3, newVolumeTexture, 0, GL_TRUE, _layer, GL_WRITE_ONLY, GL_R16F);
+	glBindImageTexture(1, _maskTexture, 0, GL_TRUE, _layer, GL_READ_ONLY, GL_R8UI);
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, _LUTbuffer);
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, _histBuffer);
+	glBindImageTexture(4, newVolumeTexture, 0, GL_TRUE, _layer, GL_WRITE_ONLY, GL_R16F);
 	glUniform3i(glGetUniformLocation(_lerpShader, "numSB"), numSB.x, numSB.y, numSB.z);
 	glUniform1ui(glGetUniformLocation(_lerpShader, "NUM_BINS"), _numInGrayVals);
 	glUniform3ui(glGetUniformLocation(_lerpShader, "offset"), offset.x, offset.y, offset.z);
 	glUniform1i(glGetUniformLocation(_lerpShader, "useLUT"), _useLUT);
+	glUniform1i(glGetUniformLocation(_lerpShader, "useMask"), useMask);
 
 	glDispatchCompute(	(GLuint)((volDims.x + 3) / 4),
 						(GLuint)((volDims.y + 3) / 4),
@@ -452,9 +489,47 @@ GLuint ComputeCLAHE::computeLerp(glm::uvec3 volDims, glm::uvec3 numSB, glm::uvec
 
 	// make sure writting to the image is finished before reading 
 	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
-	glUseProgram(0);
+	glUseProgram(0);	
+	
 
-	printf("...\n");
+	if (!useMask) {
+		printf("lerp round2 ...");
+		// generate the new volume texture MASKED
+		//GLuint maskedVersion;
+		glGenTextures(1, &maskedVersion);
+		glBindTexture(GL_TEXTURE_3D, maskedVersion);
+		glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+		glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+		glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_REPEAT);
+		glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexStorage3D(GL_TEXTURE_3D, 1, GL_R16F, _volDims.x, _volDims.y, _volDims.z);
+		glBindTexture(GL_TEXTURE_3D, 0);
+
+
+		// Set up Compute Shader 
+		glUseProgram(_lerpShader);
+		glBindImageTexture(0, _volumeTexture, 0, GL_TRUE, _layer, GL_READ_ONLY, GL_R16UI);
+		glBindImageTexture(1, _maskTexture, 0, GL_TRUE, _layer, GL_READ_ONLY, GL_R8UI);
+		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, _LUTbuffer);
+		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, _histBuffer);
+		glBindImageTexture(4, maskedVersion, 0, GL_TRUE, _layer, GL_WRITE_ONLY, GL_R16F);
+		glUniform3i(glGetUniformLocation(_lerpShader, "numSB"), numSB.x, numSB.y, numSB.z);
+		glUniform1ui(glGetUniformLocation(_lerpShader, "NUM_BINS"), _numInGrayVals);
+		glUniform3ui(glGetUniformLocation(_lerpShader, "offset"), offset.x, offset.y, offset.z);
+		glUniform1i(glGetUniformLocation(_lerpShader, "useLUT"), _useLUT);
+		glUniform1i(glGetUniformLocation(_lerpShader, "useMask"), true);
+
+		glDispatchCompute((GLuint)((volDims.x + 3) / 4),
+			(GLuint)((volDims.y + 3) / 4),
+			(GLuint)((volDims.z + 3) / 4));
+
+		// make sure writting to the image is finished before reading 
+		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
+		glUseProgram(0);
+
+		printf("...\n");
+	}
 	return newVolumeTexture;
 }
 

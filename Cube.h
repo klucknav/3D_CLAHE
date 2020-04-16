@@ -15,6 +15,7 @@ public:
 	Cube();
 	~Cube();
 
-	void Draw(GLuint shader, const glm::mat4& VPMatrix, const glm::vec3& CamPos, GLuint texture);
+	void Draw(GLuint shader, const glm::mat4& VPMatrix, const glm::vec3& CamPos, 
+			  GLuint texture, GLuint maskTexture, bool useMask=false);
 	//void update();
 };

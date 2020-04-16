@@ -3,7 +3,8 @@
 // displays volume texture 
 ////////////////////////////////////////
 
-#version 440 core
+#version 430
+//#version 440 core
 
 in vs_out {
 	vec3 rayDirection;
@@ -17,7 +18,11 @@ uniform float Exposure = 1.0;	// brighten volume 1.8
 uniform float Density = 0.1;	// 
 uniform float StepSize = .002;
 uniform vec3 CameraPosition;
+
+// Volume and mask Textures 
 uniform sampler3D Volume;
+uniform int useMask;
+layout(r8ui, binding = 1) uniform uimage3D Mask;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Helper functions
@@ -37,6 +42,17 @@ float RayPlane(vec3 rayOrigin, vec3 rayDirection, vec3 planePoint, vec3 planeNor
 
 vec4 Sample(vec3 samplePoint) {
 	vec4 colorSample = textureLod(Volume, samplePoint, 0.0).rrrr;
+
+	if (useMask == 1) {
+//		float maskVal = textureLod(Mask, samplePoint, 0.0).x;
+		ivec3 dims = imageSize(Mask);
+		ivec3 samplePt = ivec3(samplePoint * dims);
+//		samplePt.x = dims.x - samplePt.x;
+		uint maskVal = imageLoad(Mask, samplePt).x;
+		if (maskVal == 0.0) {
+			colorSample.a = maskVal;
+		}
+	}
 //	colorSample.a = max(0.0, (colorSample.a - Threshold) / (1.0 - Threshold)); // subtractive for soft edges
 //	colorSample.rgb *= Exposure;
 	colorSample.a *= Density;
@@ -92,6 +108,6 @@ void main() {
 	}
 
 	sum.a = clamp(sum.a, 0.0, 1.0);
-	FragColor = sum;
+	FragColor = sum;		
 }
 ////////////////////////////////////////////////////////////////////////////////
