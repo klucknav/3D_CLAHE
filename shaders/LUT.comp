@@ -32,6 +32,7 @@ void main() {
 	uint binSize = 1 + uint((globalMax - globalMin) / NUM_OUT_BINS);
 
 	// build up the LUT
+	LUT[index] = 0;
 	if (index >= globalMin || index <= globalMax) {
 		// LUT     =       (i - min)       / binSize
 		LUT[index] = ( index - globalMin ) / binSize;

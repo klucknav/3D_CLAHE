@@ -30,7 +30,7 @@ Cube* SceneManager::_dicomCube;
 GLuint SceneManager::_dicomVolumeTexture;
 GLuint SceneManager::_claheDicomVolumeTexture;
 GLuint SceneManager::_focusedDicomVolumeTexture;
-GLuint _testVolume, _maskTexture, _claheFullMasked, _claheOnlyMask;
+GLuint _testVolume, _maskTexture, _claheFullMasked, _claheOnlyMask, _claheOnlyMaskv2;
 GLuint _currTexture;
 bool _useMask = false;
 
@@ -131,7 +131,7 @@ void SceneManager::InitScene() {
 	_dicomTexture = _dicomImage->GetTextureID();
 
 	// 2D CLAHE
-	/*glm::uvec2 numCR = glm::uvec2(2, 2);
+	glm::uvec2 numCR = glm::uvec2(2, 2);
 	//glm::uvec2 numCR = glm::uvec2(4, 4);
 	unsigned int numGrayValsFinal2D = 65536;
 	float clipLimit2D = 0.85f;
@@ -144,7 +144,7 @@ void SceneManager::InitScene() {
 	// Focused 2D CLAHE
 	glm::uvec2 min2D = glm::uvec2(200, 200);
 	glm::uvec2 max2D = glm::uvec2(400, 400);
-	_focusedDicomTexture = _test->Focused_CLAHE_2D(min2D, max2D, numGrayValsFinal2D, clipLimit2D);*/
+	_focusedDicomTexture = _test->Focused_CLAHE_2D(min2D, max2D, numGrayValsFinal2D, clipLimit2D);
 
 	////////////////////////////////////////////////////////////////////////////
 	// 3D CLAHE - Cube Volume 
@@ -160,21 +160,22 @@ void SceneManager::InitScene() {
 	// 3D CLAHE
 	//glm::uvec3 numSB = glm::uvec3(2, 2, 1);
 	glm::uvec3 numSB = glm::uvec3(4, 4, 2);
+	//unsigned int finalGrayVals_3D = 256;
 	unsigned int finalGrayVals_3D = 65536;
 	unsigned int ogGrayVals_3D = 65536;
 	//float clipLimit3D = 1.5f;
 	
-	/*CLAHE* _volumeTest = new CLAHE(_dicomVolume);
+	//CLAHE* _volumeTest = new CLAHE(_dicomVolume);
 
 	// Regular 3D CLAHE
-	_claheDicomVolumeTexture = _volumeTest->CLAHE_3D(numSB, finalGrayVals_3D, clipLimit3D);
-	_testVolume = _volumeTest->CLAHE_3D(numSB, finalGrayVals_3D, clipLimit3D);
-	
-	// Focused 3D CLAHE
-	glm::uvec3 min3D = glm::uvec3(200, 200, 40);
-	glm::uvec3 max3D = glm::uvec3(400, 400, 90);
-	_focusedDicomVolumeTexture = _volumeTest->Focused_CLAHE_3D(min3D, max3D, finalGrayVals_3D, clipLimit3D);
-	_testVolume = _volumeTest->Focused_CLAHE_3D(min3D, max3D, finalGrayVals_3D, clipLimit3D);*/
+	//_claheDicomVolumeTexture = _volumeTest->CLAHE_3D(numSB, finalGrayVals_3D, 1.0f);
+	////_testVolume = _volumeTest->CLAHE_3D(numSB, finalGrayVals_3D, clipLimit3D);
+	//
+	//// Focused 3D CLAHE
+	//glm::uvec3 min3D = glm::uvec3(200, 200, 40);
+	//glm::uvec3 max3D = glm::uvec3(400, 400, 90);
+	//_focusedDicomVolumeTexture = _volumeTest->Focused_CLAHE_3D(min3D, max3D, finalGrayVals_3D, clipLimit3D);
+	//_testVolume = _volumeTest->Focused_CLAHE_3D(min3D, max3D, finalGrayVals_3D, clipLimit3D);
 
 	////////////////////////////////////////////////////////////////////////////
 	// Using Compute Shaders
@@ -184,6 +185,7 @@ void SceneManager::InitScene() {
 
 	_claheDicomVolumeTexture = comp.Compute3D_CLAHE(_claheFullMasked, numSB, clipLimit3D);
 	_claheOnlyMask = comp.Compute3D_CLAHE(_claheFullMasked, numSB, clipLimit3D, true);
+	_claheOnlyMaskv2 = comp.ComputeMasked3D_CLAHE(clipLimit3D);
 	_focusedDicomVolumeTexture = comp.ComputeFocused3D_CLAHE(min3D, max3D, clipLimit3D);
 	
 
@@ -306,6 +308,9 @@ void SceneManager::KeyCallback(GLFWwindow* window, int key, int scancode, int ac
 			case GLFW_KEY_3:
 				_currTexture = _claheOnlyMask;
 				break;
+			case GLFW_KEY_4:
+				_currTexture = _claheOnlyMaskv2;
+				break;
 			case GLFW_KEY_M:
 				_useMask = !_useMask;
 				break;
@@ -377,6 +382,7 @@ void SceneManager::KeyCallback(GLFWwindow* window, int key, int scancode, int ac
 				newTexture = comp.ComputeFocused3D_CLAHE(min3D, max3D, clipLimit3D);
 				if (newTexture != 0)
 					_focusedDicomVolumeTexture = newTexture;
+					_currTexture = newTexture;
 				break;
 			case GLFW_KEY_Y:
 				if (mods == GLFW_MOD_SHIFT) {
@@ -402,6 +408,7 @@ void SceneManager::KeyCallback(GLFWwindow* window, int key, int scancode, int ac
 				newTexture = comp.ComputeFocused3D_CLAHE(min3D, max3D, clipLimit3D);
 				if (newTexture != 0)
 					_focusedDicomVolumeTexture = newTexture;
+					_currTexture = newTexture;
 				break;
 			case GLFW_KEY_Z:
 				if (mods == GLFW_MOD_SHIFT) {
@@ -427,6 +434,7 @@ void SceneManager::KeyCallback(GLFWwindow* window, int key, int scancode, int ac
 				newTexture = comp.ComputeFocused3D_CLAHE(min3D, max3D, clipLimit3D);
 				if (newTexture != 0)
 					_focusedDicomVolumeTexture = newTexture;
+					_currTexture = newTexture;
 				break;
 		}
 	}

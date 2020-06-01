@@ -62,6 +62,7 @@ void Cube::Draw(GLuint shader, const glm::mat4& VPMatrix, const glm::vec3& CamPo
 
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_3D, texture);
+	//glBindImageTexture(0, texture, 0, GL_TRUE, 1, GL_READ_ONLY, GL_R16UI);	
 	glUniform1i(glGetUniformLocation(shader, "Volume"), 0);
 
 	//glActiveTexture(GL_TEXTURE1);

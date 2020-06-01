@@ -1,0 +1,45 @@
+////////////////////////////////////////
+// LUT_masked.comp
+// computes the LUTs for Masked CLAHE
+////////////////////////////////////////
+
+#version 430
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;	// 64 threads
+
+// stores the min/max value for the volume 
+layout(std430, binding = 0) buffer minBuffer {
+	uint[] minData;
+};
+layout(std430, binding = 1) buffer maxBuffer {
+	uint[] maxData;
+};
+
+// output LUT texture
+layout(std430, binding = 2) buffer lutBuffer {
+    uint LUT[];
+};
+
+uniform uint NUM_IN_BINS;
+uniform uint NUM_OUT_BINS;
+uniform uint numOrgans;
+
+void main() {
+	
+	uint index = gl_GlobalInvocationID.x;
+
+	for (int currOrgan = 0; currOrgan < numOrgans; currOrgan++) {
+		uint currMin = minData[currOrgan];
+		uint currMax = maxData[currOrgan];
+	
+		// calculate the size of the bins
+		uint binSize = 1 + uint((currMax - currMin) / NUM_OUT_BINS);
+
+		// build up the LUT
+		LUT[currOrgan * NUM_IN_BINS + index] = 0;
+		if (index >= currMin || index <= currMax) {
+			// LUT                                =       (i - min)       / binSize
+			LUT[currOrgan * NUM_IN_BINS + index] = ( index - currMin ) / binSize;
+		}
+	}
+}

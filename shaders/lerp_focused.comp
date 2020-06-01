@@ -37,6 +37,7 @@ void main() {
 	uvec3 index = gl_GlobalInvocationID.xyz;
 	ivec3 volumeDims = imageSize(volume);
 
+	// if within the focused region
 	if (index.x > minVal.x && index.y > minVal.y && index.z > minVal.z && index.x < maxVal.x  && index.y < maxVal.y && index.z < maxVal.z) {
 
 		// number of blocks to interpolate over is 2x number of SB the volume is divided into
@@ -145,20 +146,20 @@ void main() {
 		// LERP
 
 		// get the current gray value 
-		uint greyValue = imageLoad(volume, ivec3(index)).x;
+		uint grayValue = imageLoad(volume, ivec3(index)).x;
 		if (useLUT) {
-			greyValue = LUT [ greyValue ];
+			grayValue = LUT [ grayValue ];
 		}
 
 
 		// bilinear interpolation - zFront
-		float up_front = aInv * float(hist[LUF + greyValue]) / float(NUM_IN_BINS) + a * float(hist[RUF + greyValue]) / float(NUM_IN_BINS);
-		float dn_front = aInv * float(hist[LDF + greyValue]) / float(NUM_IN_BINS) + a * float(hist[RDF + greyValue]) / float(NUM_IN_BINS);
+		float up_front = aInv * float(hist[LUF + grayValue]) / float(NUM_IN_BINS) + a * float(hist[RUF + grayValue]) / float(NUM_IN_BINS);
+		float dn_front = aInv * float(hist[LDF + grayValue]) / float(NUM_IN_BINS) + a * float(hist[RDF + grayValue]) / float(NUM_IN_BINS);
 		float front  = bInv * up_front + b * dn_front;
 
 		// bilinear interpolation - zBack
-		float up_back = aInv * float(hist[LUB + greyValue]) / float(NUM_IN_BINS) + a * float(hist[RUB + greyValue]) / float(NUM_IN_BINS);
-		float dn_back = aInv * float(hist[LDB + greyValue]) / float(NUM_IN_BINS) + a * float(hist[RDB + greyValue]) / float(NUM_IN_BINS);
+		float up_back = aInv * float(hist[LUB + grayValue]) / float(NUM_IN_BINS) + a * float(hist[RUB + grayValue]) / float(NUM_IN_BINS);
+		float dn_back = aInv * float(hist[LDB + grayValue]) / float(NUM_IN_BINS) + a * float(hist[RDB + grayValue]) / float(NUM_IN_BINS);
 		float back  = bInv * up_back + b * dn_back;
 
 		// trilinear interpolation
@@ -168,9 +169,9 @@ void main() {
 		// store new value back into the volume texture 
 		imageStore(newVolume, ivec3(index), vec4(ans, 0, 0, 0));
 	}
+	// if not in the focused region
 	else {
-		uint greyValue = imageLoad(volume, ivec3(index)).x;
-		vec4 color = vec4(float(greyValue) / float(NUM_IN_BINS), 0, 0, 0);
-		imageStore(newVolume, ivec3(index), color);
+		uint grayValue = imageLoad(volume, ivec3(index)).x;
+		imageStore(newVolume, ivec3(index), vec4(grayValue / float(NUM_OUT_BINS), 0, 0, 0));
 	}
 }

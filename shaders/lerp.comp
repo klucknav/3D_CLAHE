@@ -26,9 +26,9 @@ layout(r16f, binding = 4) uniform image3D newVolume;
 
 
 uniform ivec3 numSB;	// number of Sub Blocks
-uniform uint NUM_BINS;	// number of gray values in the Volume 
+uniform uint NUM_IN_BINS;	// number of gray values in the Volume 
+uniform uint NUM_OUT_BINS;	// number of gray values in the new Volume
 uniform bool useLUT;	// if we need to use the LUT to map to a different bit range
-uniform uvec3 offset;	// start of the region to apply CLAHE to
 uniform bool useMask;	// if we want to use the entire mask or not
 
 void main() {
@@ -128,48 +128,51 @@ void main() {
 
 	////////////////////////////////////////////////////////////////////////////
 	// get the histogram indices for the neighbooring subblocks 
-	uint LUF = NUM_BINS * (zFront * numSB.x * numSB.y + yUp   * numSB.x + xLeft  );
-	uint RUF = NUM_BINS * (zFront * numSB.x * numSB.y + yUp   * numSB.x + xRight );
-	uint LDF = NUM_BINS * (zFront * numSB.x * numSB.y + yDown * numSB.x + xLeft  );
-	uint RDF = NUM_BINS * (zFront * numSB.x * numSB.y + yDown * numSB.x + xRight );
+	uint LUF = NUM_IN_BINS * (zFront * numSB.x * numSB.y + yUp   * numSB.x + xLeft  );
+	uint RUF = NUM_IN_BINS * (zFront * numSB.x * numSB.y + yUp   * numSB.x + xRight );
+	uint LDF = NUM_IN_BINS * (zFront * numSB.x * numSB.y + yDown * numSB.x + xLeft  );
+	uint RDF = NUM_IN_BINS * (zFront * numSB.x * numSB.y + yDown * numSB.x + xRight );
 
-	uint LUB = NUM_BINS * (zBack * numSB.x * numSB.y + yUp   * numSB.x + xLeft   );
-	uint RUB = NUM_BINS * (zBack * numSB.x * numSB.y + yUp   * numSB.x + xRight  );
-	uint LDB = NUM_BINS * (zBack * numSB.x * numSB.y + yDown * numSB.x + xLeft   );
-	uint RDB = NUM_BINS * (zBack * numSB.x * numSB.y + yDown * numSB.x + xRight  );
+	uint LUB = NUM_IN_BINS * (zBack * numSB.x * numSB.y + yUp   * numSB.x + xLeft   );
+	uint RUB = NUM_IN_BINS * (zBack * numSB.x * numSB.y + yUp   * numSB.x + xRight  );
+	uint LDB = NUM_IN_BINS * (zBack * numSB.x * numSB.y + yDown * numSB.x + xLeft   );
+	uint RDB = NUM_IN_BINS * (zBack * numSB.x * numSB.y + yDown * numSB.x + xRight  );
 
 
 	////////////////////////////////////////////////////////////////////////////
 	// LERP
 
 	// get the current gray value 
-	uint greyValue = imageLoad(volume, ivec3(index + offset)).x;
+	uint greyValue = imageLoad(volume, ivec3(index)).x;
 	if (useLUT) {
 		greyValue = LUT [ greyValue ];
 	}
 
 	// bilinear interpolation - zFront
-	float up_front = aInv * float(hist[LUF + greyValue]) / float(NUM_BINS) + a * float(hist[RUF + greyValue]) / float(NUM_BINS);
-	float dn_front = aInv * float(hist[LDF + greyValue]) / float(NUM_BINS) + a * float(hist[RDF + greyValue]) / float(NUM_BINS);
+	float up_front = aInv * float(hist[LUF + greyValue]) / float(NUM_IN_BINS) + a * float(hist[RUF + greyValue]) / float(NUM_IN_BINS);
+	float dn_front = aInv * float(hist[LDF + greyValue]) / float(NUM_IN_BINS) + a * float(hist[RDF + greyValue]) / float(NUM_IN_BINS);
 	float front  = bInv * up_front + b * dn_front;
 
 	// bilinear interpolation - zBack
-	float up_back = aInv * float(hist[LUB + greyValue]) / float(NUM_BINS) + a * float(hist[RUB + greyValue]) / float(NUM_BINS);
-	float dn_back = aInv * float(hist[LDB + greyValue]) / float(NUM_BINS) + a * float(hist[RDB + greyValue]) / float(NUM_BINS);
+	float up_back = aInv * float(hist[LUB + greyValue]) / float(NUM_IN_BINS) + a * float(hist[RUB + greyValue]) / float(NUM_IN_BINS);
+	float dn_back = aInv * float(hist[LDB + greyValue]) / float(NUM_IN_BINS) + a * float(hist[RDB + greyValue]) / float(NUM_IN_BINS);
 	float back  = bInv * up_back + b * dn_back;
 
 	// trilinear interpolation
 	float normFactor = float(size.x) * float(size.y) * float(size.z);
 	float ans = (cInv * front + c * back) / normFactor;
 
-	uint maskVal = imageLoad(mask, ivec3(index + offset)).r;
+	// use mask data only to get the mappings for the entire volume
+//	imageStore(newVolume, ivec3(index), vec4(ans, 0, 0, 0));
+
+
 	// if we are using masks AND we are masked out -> store the original grayValue
+	uint maskVal = imageLoad(mask, ivec3(index)).r;
 	if (useMask && maskVal == 0) {
-		imageStore(newVolume, ivec3(index + offset), vec4(greyValue/ float(NUM_BINS), 0, 0, 0));
+		imageStore(newVolume, ivec3(index), vec4(greyValue / float(NUM_OUT_BINS), 0, 0, 0));
 	}
 	// otherwise -> store the new value 
 	else {
-		// store new value back into the volume texture 
-		imageStore(newVolume, ivec3(index + offset), vec4(ans, 0, 0, 0));
+		imageStore(newVolume, ivec3(index), vec4(ans, 0, 0, 0));
 	}
 }

@@ -80,9 +80,9 @@ CLAHE::CLAHE(ImageLoader* img) {
 	_minVal = min;
 	_maxVal = max;
 
-	printf("CLAHE: \n");
-	printf("imageDims: %d, %d, %d\n", _imgDimX, _imgDimY, _imgDimZ);
-	printf("min = %d, max = %d\n", _minVal, _maxVal);
+	//printf("CLAHE: \n");
+	//printf("imageDims: %d, %d, %d\n", _imgDimX, _imgDimY, _imgDimZ);
+	//printf("min = %d, max = %d\n", _minVal, _maxVal);
 }
 
 CLAHE::CLAHE(uint16_t* img, glm::vec3 imgDims, unsigned int minV, unsigned int maxV) {
@@ -109,9 +109,9 @@ CLAHE::CLAHE(uint16_t* img, glm::vec3 imgDims, unsigned int minV, unsigned int m
 		}
 	}
 
-	printf("CLAHE: \n");
-	printf("imageDims: %d, %d, %d\n", _imgDimX, _imgDimY, _imgDimZ);
-	printf("min = %d, max = %d\n", min, max);
+	//printf("CLAHE: \n");
+	//printf("imageDims: %d, %d, %d\n", _imgDimX, _imgDimY, _imgDimZ);
+	//printf("min = %d, max = %d\n", min, max);
 }
 
 CLAHE::~CLAHE() {
@@ -426,9 +426,9 @@ void CLAHE::clahe2D(uint16_t* image, glm::uvec2 imageDim, glm::uvec2 numCR, unsi
 	unsigned int sizeCRy = imageDim.y / numCR.y;
 	unsigned long numPixelsCR = (unsigned long)sizeCRx * (unsigned long)sizeCRy;
 
-	printf("Num Contextual Regions: %i, %i, Image size: %i, %i\n", numCR.x, numCR.y, imageDim.x, imageDim.y);
-	printf("Size of Contextual Regions: %d, %d, each with %d pixels\n\n", sizeCRx, sizeCRy, numPixelsCR);
-	printf("Make LUT...Image Range: [%d, %d], numBins: %d\n", _minVal, _maxVal, numBins);
+	//printf("Num Contextual Regions: %i, %i, Image size: %i, %i\n", numCR.x, numCR.y, imageDim.x, imageDim.y);
+	//printf("Size of Contextual Regions: %d, %d, each with %d pixels\n\n", sizeCRx, sizeCRy, numPixelsCR);
+	//printf("Make LUT...Image Range: [%d, %d], numBins: %d\n", _minVal, _maxVal, numBins);
 
 
 	// Make the LUT - to scale the input image from NUM_GRAY_VALS to numBins
@@ -441,7 +441,7 @@ void CLAHE::clahe2D(uint16_t* image, glm::uvec2 imageDim, glm::uvec2 numCR, unsi
 	memset(mappedHist, 0, sizeof(unsigned int) * numCR.x * numCR.y * numBins);
 
 	// Calculate greylevel mappings for each contextual region 
-	printf("build local histograms...\n");
+	//printf("build local histograms...\n");
 	for (unsigned int currCRy = 0; currCRy < numCR.y; currCRy++) {
 		unsigned int startY = currCRy * sizeCRy;
 		unsigned int endY = (currCRy + 1) * sizeCRy;
@@ -464,7 +464,7 @@ void CLAHE::clahe2D(uint16_t* image, glm::uvec2 imageDim, glm::uvec2 numCR, unsi
 
 
 	// Interpolate greylevel mappings to get CLAHE image 
-	printf("interpolate...\n");
+	//printf("interpolate...\n");
 
 	unsigned int xRight, xLeft, yUp, yDown, subY, subX;
 	unsigned int* L_Up, * L_Dn, * R_Up, * R_Dn;
@@ -527,7 +527,7 @@ void CLAHE::clahe2D(uint16_t* image, glm::uvec2 imageDim, glm::uvec2 numCR, unsi
 	delete[] mappedHist;
 	delete[] LUT;
 
-	std::cerr << "\n";
+	//std::cerr << "\n";
 }
 
 

@@ -1,0 +1,63 @@
+////////////////////////////////////////
+// lerp_masked.comp
+// Trilinear Interpolation for Masked CLAHE
+////////////////////////////////////////
+
+#version 430
+
+layout(local_size_x = 4, local_size_y = 4, local_size_z = 4) in;	// 64 threads
+
+// input Dicom volume
+layout(r16ui, binding = 0) uniform uimage3D volume;
+// input mask data
+layout(r8ui, binding = 1) uniform uimage3D mask;
+
+// input LUT
+layout(std430, binding = 2) buffer lutBuffer {
+    uint LUT[];
+};
+// input Histogram
+layout(std430, binding = 3) buffer inHist {
+    uint hist[];
+};
+
+// output Volume Data
+layout(r16f, binding = 4) uniform image3D newVolume;
+
+
+uniform ivec3 numSB;	// number of Sub Blocks
+uniform uint NUM_IN_BINS;	// number of gray values in the Volume 
+uniform uint NUM_OUT_BINS;	// number of gray values in the new Volume
+uniform bool useLUT;	// if we need to use the LUT to map to a different bit range
+
+void main() {
+
+	// figure out which block this voxel belongs to
+	uvec3 index = gl_GlobalInvocationID.xyz;	
+	uint maskVal = imageLoad(mask, ivec3(index)).r;
+	uint histIndex = uint(log2(maskVal));
+
+	// get the current gray value 
+	uint grayValue = imageLoad(volume, ivec3(index)).x;
+	if (useLUT) {
+		grayValue = LUT [histIndex * NUM_IN_BINS + grayValue ];
+	}
+
+	float newGrayValue = hist[histIndex + grayValue] / float(NUM_IN_BINS);
+
+	// if we are using masks AND we are masked out -> store the original grayValue
+	if (maskVal == 0) {
+		// re-do the LUT if needed bc only use the organs for the LUT generation
+		uint grayValue = imageLoad(volume, ivec3(index)).x;
+//		if (useLUT) {
+//			uint binSize = 1 + (NUM_IN_BINS / NUM_OUT_BINS);
+//			grayValue = grayValue / binSize;
+//		}
+		imageStore(newVolume, ivec3(index), vec4(grayValue / float(NUM_OUT_BINS), 0, 0, 0));
+	}
+	// otherwise -> store the new value 
+	else {
+		// store new value back into the volume texture 
+		imageStore(newVolume, ivec3(index), vec4(newGrayValue, 0, 0, 0));
+	}
+}

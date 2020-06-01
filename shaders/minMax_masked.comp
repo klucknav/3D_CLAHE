@@ -1,0 +1,47 @@
+////////////////////////////////////////
+// minMax_masked.comp
+// computes the min/max values for each organ in Masked CLAHE
+////////////////////////////////////////
+
+#version 430
+
+layout(local_size_x = 4, local_size_y = 4, local_size_z = 4) in;	// 64 threads
+
+// input Dicom volume and mask
+layout(r16ui, binding = 0) uniform uimage3D volume;
+layout(r8ui, binding = 1) uniform uimage3D mask;
+
+// to calculate the min/max value
+layout(std430, binding = 2) buffer minBuffer {
+	uint[] minData;
+};
+layout(std430, binding = 3) buffer maxBuffer {
+	uint[] maxData;
+};
+// to count the number of pixels shown in the mask
+layout(std430, binding = 4) buffer pixelCountBuffer {
+	uint pixelCount[];
+};
+
+uniform uvec3 volumeDims;	// size of the section of the volume we are applying CLAHE to 
+
+void main() {
+
+	// calculate the max and min for the volume 
+	uvec3 index = gl_GlobalInvocationID.xyz;
+	uint val = imageLoad(volume, ivec3(index)).x;
+	uint maskVal = imageLoad(mask, ivec3(index)).x;
+	uint organIndex = uint(log2(maskVal));
+
+	// if we are masked out -> return 
+	if ( maskVal == 0 ) {
+		return;
+	}
+
+	// get the min/max for this organ
+	atomicMin(minData[organIndex], val);
+	atomicMax(maxData[organIndex], val);
+
+	// count the number of pixels contributing to the hist
+	atomicAdd(pixelCount[organIndex], 1);
+}
