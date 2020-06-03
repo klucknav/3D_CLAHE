@@ -7,7 +7,6 @@
 
 #include <thread>
 #include <algorithm>
-#include <chrono>
 
 using namespace std;
 
@@ -89,8 +88,7 @@ ComputeCLAHE::~ComputeCLAHE() {
 // Returns the new 3D CLAHE volume texture
 GLuint ComputeCLAHE::Compute3D_CLAHE(glm::uvec3 numSB, float clipLimit) {
 
-	printf("\n----- Compute 3D CLAHE ----- ");
-	chrono::high_resolution_clock::time_point t1 = chrono::high_resolution_clock::now();
+	printf("\n----- Compute 3D CLAHE ----- \n");
 
 	// make sure the clip limit is valid - ie. between [0, 1]
 	clipLimit = glm::clamp(clipLimit, 0.0f, 1.0f);
@@ -105,16 +103,12 @@ GLuint ComputeCLAHE::Compute3D_CLAHE(glm::uvec3 numSB, float clipLimit) {
 	uint32_t minMax[2] = { _numInGrayVals, 0 };
 	computeLUT(_volDims, minMax, useLUT);
 
-	// Create the Histogram
+	// Create the Histograms
 	computeHist(_volDims, numSB, useLUT);
 	computeClipHist(_volDims, numSB, clipLimit, minMax);
 
 	// Interpolate to create the new texture
-	GLuint newTexture = computeLerp(_volDims, numSB, useLUT);
-	chrono::high_resolution_clock::time_point t2 = chrono::high_resolution_clock::now();
-	chrono::duration<double> time_span = chrono::duration_cast<chrono::duration<double>>(t2 - t1);
-	printf("(%f seconds)\n", time_span.count());
-	return newTexture;
+	return computeLerp(_volDims, numSB, useLUT);
 }
 
 // Focused CLAHE
@@ -126,8 +120,7 @@ GLuint ComputeCLAHE::Compute3D_CLAHE(glm::uvec3 numSB, float clipLimit) {
 //		new Focused CLAHE volume texture 
 GLuint ComputeCLAHE::ComputeFocused3D_CLAHE(glm::ivec3 min, glm::ivec3 max, float clipLimit) {
 
-	printf("\n----- Compute Focused 3D CLAHE ----- ");
-	chrono::high_resolution_clock::time_point t1 = chrono::high_resolution_clock::now();
+	printf("\n----- Compute Focused 3D CLAHE ----- \n");
 
 	// Make sure Max/Min values are within the Volume Dimensions
 	min.x = std::max(min.x, 0);				max.x = std::min(max.x, _volDims.x);
@@ -152,7 +145,7 @@ GLuint ComputeCLAHE::ComputeFocused3D_CLAHE(glm::ivec3 min, glm::ivec3 max, floa
 		return _volumeTexture;
 	}
 	// initialize variables 
-	bool useLUT = true; // make sure to spread out the pixel values for the focused region
+	bool useLUT = true; // to spread out the pixel values for the focused region
 
 	// Create the LUT
 	uint32_t minMax[2] = { _numInGrayVals, 0 };
@@ -163,13 +156,7 @@ GLuint ComputeCLAHE::ComputeFocused3D_CLAHE(glm::ivec3 min, glm::ivec3 max, floa
 	computeClipHist(focusedDim, numSB, clipLimit, minMax);
 
 	// Interpolate to create the new texture
-	GLuint newTexture = computeLerp_Focused(focusedDim, numSB, min, max, useLUT);
-
-	chrono::high_resolution_clock::time_point t2 = chrono::high_resolution_clock::now();
-	chrono::duration<double> time_span = chrono::duration_cast<chrono::duration<double>>(t2 - t1);
-	printf("(%f seconds)\n", time_span.count());
-
-	return newTexture;
+	return computeLerp_Focused(focusedDim, numSB, min, max, useLUT);
 }
 
 // Masked CLAHE
@@ -178,8 +165,7 @@ GLuint ComputeCLAHE::ComputeFocused3D_CLAHE(glm::ivec3 min, glm::ivec3 max, floa
 // Returns the new Masked CLAHE volume texture 
 GLuint ComputeCLAHE::ComputeMasked3D_CLAHE(float clipLimit) {	
 	
-	printf("\n----- Compute Masked 3D CLAHE ----- ");
-	chrono::high_resolution_clock::time_point t1 = chrono::high_resolution_clock::now();
+	printf("\n----- Compute Masked 3D CLAHE ----- \n");
 
 	// make sure the clip limit is valid - ie. between [0, 1]
 	clipLimit = glm::clamp(clipLimit, 0.0f, 1.0f);
@@ -189,27 +175,22 @@ GLuint ComputeCLAHE::ComputeMasked3D_CLAHE(float clipLimit) {
 	}
 
 	// Create the LUTs
-	bool useLUT = true; // make sure to spread out the pixel values for the masked organ
+	bool useLUT = true; // to spread out the pixel values for the masked organs
 	uint32_t* minData = new uint32_t[_numOrgans];		std::fill_n(minData, _numOrgans, _numInGrayVals);
 	uint32_t* maxData = new uint32_t[_numOrgans];		memset(maxData, 0, _numOrgans * sizeof(uint32_t));
 	uint32_t* numPixels = new uint32_t[_numOrgans];		memset(numPixels, 0, _numOrgans * sizeof(uint32_t));
 	computeLUT_Masked(_volDims, minData, maxData, numPixels);
 
-	// Create and clip the Histograms 
+	// Create the Histograms 
 	glm::uvec3 numSB = glm::uvec3(1, 1, 1);	// only use 1 SB per organ
 	computeHist_Masked(_volDims, useLUT);
 	computeClipHist_Masked(_volDims, clipLimit, minData, maxData, numPixels);
-
-	// Interpolate to re-create the new texture
-	GLuint newTexture = computeLerp_Masked(_volDims, useLUT);
-	chrono::high_resolution_clock::time_point t2 = chrono::high_resolution_clock::now();
-	chrono::duration<double> time_span = chrono::duration_cast<chrono::duration<double>>(t2 - t1);
-	printf("(%f seconds)\n", time_span.count());
-
 	delete[] minData;
 	delete[] maxData;
 	delete[] numPixels;
-	return newTexture;
+
+	// Interpolate to re-create the new texture
+	return computeLerp_Masked(_volDims, useLUT);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

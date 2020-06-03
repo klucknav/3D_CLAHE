@@ -5,7 +5,6 @@
 #include "SceneManager.h"
 #include "Shader.h"
 #include "ImageLoader.h"
-#include "CLAHE.h"
 #include "ComputeCLAHE.h"
 
 #include <stdio.h>
@@ -18,27 +17,24 @@ GLFWwindow* SceneManager::_window;
 
 // Scene Variables
 Camera* SceneManager::_camera;
-bool SceneManager::_drawVolume;
-// 2D Image
-ImageLoader* _dicomSlice;
-GLuint SceneManager::_dicomTexture;
-GLuint SceneManager::_2D_CLAHE;
-GLuint SceneManager::_2D_FocusedCLAHE;
 // 3D Volume
 ImageLoader* _dicomVolume;
 Cube* SceneManager::_dicomCube;
 GLuint SceneManager::_dicomVolumeTexture;
 GLuint SceneManager::_dicomMaskTexture;
+// CLAHE Textures
 GLuint SceneManager::_3D_CLAHE;
 GLuint SceneManager::_FocusedCLAHE;
 GLuint SceneManager::_MaskedCLAHE;
+// CLAHE Shader
+GLuint SceneManager::_volumeShader;
 
+// CLAHE Variables
 ComputeCLAHE comp;
 glm::uvec3 numSB_3D = glm::uvec3(4, 4, 2);
 glm::uvec3 min3D = glm::uvec3(200, 200, 40);
 glm::uvec3 max3D = glm::uvec3(400, 400, 90);
 float clipLimit3D = 0.85f;
-float clipLimit2D = 0.85f;
 
 GLuint _currTexture;
 bool _useMask = false;
@@ -55,10 +51,6 @@ enum class InteractionMode {
 };
 InteractionMode _interactionMode;
 
-// Shader Variables
-GLuint SceneManager::_volumeShader;
-GLuint SceneManager::_displayShader;
-GLuint SceneManager::_VAO;
 
 // Interaction Variables
 bool LeftDown, RightDown;
@@ -121,28 +113,7 @@ void SceneManager::InitScene() {
 
 	// load the shaders
 	_volumeShader = LoadShaders("volume.vert", "volume.frag");
-	_displayShader = LoadShaders("display.vert", "display.frag");
 	
-	////////////////////////////////////////////////////////////////////////////
-	// 2D CLAHE - Single Texture
-	std::cerr << "\n\n----- Load 2D DICOM Slice -----\n";
-	glGenVertexArrays(1, &_VAO);
-	std::string path = std::string("C:/Users/kroth/Documents/UCSD/Grad/Thesis/clahe_2/dicom/sample.dcm");
-	ImageLoader* _dicomImage = new ImageLoader(path);
-	_dicomTexture = _dicomImage->GetTextureID();
-
-	////////////////////////////////////////////////////////////////////////////
-	// 2D CLAHE - CPU
-	glm::uvec2 numCR = glm::uvec2(2, 2);	
-	glm::uvec2 min2D = glm::uvec2(200, 200);
-	glm::uvec2 max2D = glm::uvec2(400, 400);
-	unsigned int outputGrayvals_2D = 65536;
-
-	CLAHE * test = new CLAHE(_dicomImage);
-
-	_2D_CLAHE = test->CLAHE_2D(numCR, outputGrayvals_2D, clipLimit2D);
-	_2D_FocusedCLAHE = test->Focused_CLAHE_2D(min2D, max2D, outputGrayvals_2D, clipLimit2D);
-
 	////////////////////////////////////////////////////////////////////////////
 	// 3D CLAHE - Cube Volume 
 	std::cerr << "\n\n----- Load 3D DICOM -----\n";
@@ -168,7 +139,6 @@ void SceneManager::InitScene() {
 
 	////////////////////////////////////////////////////////////////////////////
 
-	_drawVolume = true;
 	_textureMode = TextureMode::_RAW;
 	_interactionMode = InteractionMode::_MOVE;
 	_currTexture = _dicomVolumeTexture;	// raw dicom
@@ -176,16 +146,10 @@ void SceneManager::InitScene() {
 
 void SceneManager::ClearScene() {
 
-	glDeleteProgram(_displayShader);
 	glDeleteProgram(_volumeShader);
-
-	glDeleteVertexArrays(1, &_VAO);
-
+	
 	delete _camera;
 	delete _dicomCube;
-
-	// ImageLoaders
-	delete _dicomSlice;
 	delete _dicomVolume;
 
 	glfwDestroyWindow(_window);
@@ -209,30 +173,9 @@ void SceneManager::Draw() {
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	// draw the volume
-	if (_drawVolume) {
-		glEnable(GL_BLEND);
-		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-		_dicomCube->Draw(_volumeShader, _camera->GetViewProjectMtx(), _camera->GetCamPos(), _currTexture, _dicomMaskTexture, _useMask);
-	}
-
-	// draw the slice 
-	else {
-		glUseProgram(_displayShader);
-		glBindVertexArray(_VAO);
-		glActiveTexture(GL_TEXTURE0);
-		switch (_textureMode) {
-			case TextureMode::_RAW:
-				glBindTexture(GL_TEXTURE_2D, _dicomTexture);
-				break;
-			case TextureMode::_CLAHE:
-				glBindTexture(GL_TEXTURE_2D, _2D_CLAHE);
-				break;
-			case TextureMode::_FOCUSED:
-				glBindTexture(GL_TEXTURE_2D, _2D_FocusedCLAHE);
-				break;
-		}
-		glDrawArrays(GL_TRIANGLES, 0, 3);
-	}
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	_dicomCube->Draw(_volumeShader, _camera->GetViewProjectMtx(), _camera->GetCamPos(), _currTexture, _dicomMaskTexture, _useMask);
 
 	// Swap buffers
 	glfwSwapBuffers(_window);
@@ -258,11 +201,6 @@ void SceneManager::KeyCallback(GLFWwindow* window, int key, int scancode, int ac
 			// reset the camera view 
 			case GLFW_KEY_R:
 				_camera->Reset();
-				break;
-
-			// swap between volume and one slice
-			case GLFW_KEY_V:
-				_drawVolume = !_drawVolume;
 				break;
 
 			// switch between the different types of CLAHE

@@ -18,23 +18,16 @@ private:
 
 	// Scene Variables 
 	static Camera* _camera;
-	static bool _drawVolume;
-	// 2D Image
-	static GLuint _dicomTexture;
-	static GLuint _2D_CLAHE;
-	static GLuint _2D_FocusedCLAHE;
 	// 3D Volume
 	static Cube* _dicomCube;
 	static GLuint _dicomVolumeTexture;
 	static GLuint _dicomMaskTexture;
+	// CLAHE Textures
 	static GLuint _3D_CLAHE;
 	static GLuint _FocusedCLAHE;
 	static GLuint _MaskedCLAHE;
-
-	// Shader Variables
-	static GLuint _displayShader;
+	// Volume Shader 
 	static GLuint _volumeShader;
-	static GLuint _VAO;
 
 	// Helper Functions
 	static void printMat(glm::mat4);
