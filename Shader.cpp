@@ -61,11 +61,11 @@ GLuint LoadSingleShader(const char* shaderFilePath, ShaderType type)
 	else
 	{
 		if (type == ShaderType::VERTEX)
-			printf("Successfully compiled vertex shader!\n");
+			printf("\rSuccessfully compiled vertex shader %s\n", shaderFilePath);
 		else if (type == ShaderType::FRAGMENT)
-			printf("Successfully compiled fragment shader!\n");
+			printf("\rSuccessfully compiled fragment shader %s\n", shaderFilePath);
 		else if (type == ShaderType::COMPUTE)
-			printf("Successfully compiled compute shader!\n");
+			printf("\rSuccessfully compiled compute shader %s\n", shaderFilePath);
 	}
 
 	return shaderID;
@@ -99,7 +99,7 @@ GLuint LinkProgram(GLuint shaderID_1, GLuint shaderID_2=0) {
 	}
 	else
 	{
-		printf("Successfully linked program!\n\n");
+		printf("\rSuccessfully linked program\n\n");
 	}
 
 	return programID;

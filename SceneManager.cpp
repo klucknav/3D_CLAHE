@@ -20,32 +20,35 @@ GLFWwindow* SceneManager::_window;
 Camera* SceneManager::_camera;
 bool SceneManager::_drawVolume;
 // 2D Image
-ImageLoader* _dicomImage;
+ImageLoader* _dicomSlice;
 GLuint SceneManager::_dicomTexture;
-GLuint SceneManager::_claheDicomTexture;
-GLuint SceneManager::_focusedDicomTexture;
+GLuint SceneManager::_2D_CLAHE;
+GLuint SceneManager::_2D_FocusedCLAHE;
 // 3D Volume
 ImageLoader* _dicomVolume;
 Cube* SceneManager::_dicomCube;
 GLuint SceneManager::_dicomVolumeTexture;
-GLuint SceneManager::_claheDicomVolumeTexture;
-GLuint SceneManager::_focusedDicomVolumeTexture;
-GLuint _testVolume, _maskTexture, _claheFullMasked, _claheOnlyMask, _claheOnlyMaskv2;
-GLuint _currTexture;
-bool _useMask = false;
+GLuint SceneManager::_dicomMaskTexture;
+GLuint SceneManager::_3D_CLAHE;
+GLuint SceneManager::_FocusedCLAHE;
+GLuint SceneManager::_MaskedCLAHE;
 
 ComputeCLAHE comp;
+glm::uvec3 numSB_3D = glm::uvec3(4, 4, 2);
 glm::uvec3 min3D = glm::uvec3(200, 200, 40);
 glm::uvec3 max3D = glm::uvec3(400, 400, 90);
 float clipLimit3D = 0.85f;
+float clipLimit2D = 0.85f;
 
+GLuint _currTexture;
+bool _useMask = false;
 enum class TextureMode {
 	_RAW,
 	_CLAHE,
-	_FOCUSED
+	_FOCUSED,
+	_MASKED
 };
 TextureMode _textureMode;
-
 enum class InteractionMode {
 	_MOVE, 
 	_CHANGE
@@ -98,7 +101,6 @@ int SceneManager::CreateWindow(const char* title, int width, int height) {
 	glfwSetMouseButtonCallback(_window, MouseButtonCallback);
 	glfwSetCursorPosCallback(_window, CursorPositionCallback);
 	glfwSetWindowSizeCallback(_window, ResizeCallback);
-	//ResizeCallback(_window, width, height);
 
 	glEnable(GL_MULTISAMPLE);
 
@@ -114,83 +116,59 @@ bool SceneManager::WindowOpen() {
 
 void SceneManager::InitScene() {
 
+	////////////////////////////////////////////////////////////////////////////
 	_camera = new Camera();
 
 	// load the shaders
 	_volumeShader = LoadShaders("volume.vert", "volume.frag");
 	_displayShader = LoadShaders("display.vert", "display.frag");
-
-	_drawVolume = true;
-	glm::vec3 size, imgDims, volDims;
-
+	
 	////////////////////////////////////////////////////////////////////////////
 	// 2D CLAHE - Single Texture
+	std::cerr << "\n\n----- Load 2D DICOM Slice -----\n";
 	glGenVertexArrays(1, &_VAO);
 	std::string path = std::string("C:/Users/kroth/Documents/UCSD/Grad/Thesis/clahe_2/dicom/sample.dcm");
 	ImageLoader* _dicomImage = new ImageLoader(path);
 	_dicomTexture = _dicomImage->GetTextureID();
 
-	// 2D CLAHE
-	glm::uvec2 numCR = glm::uvec2(2, 2);
-	//glm::uvec2 numCR = glm::uvec2(4, 4);
-	unsigned int numGrayValsFinal2D = 65536;
-	float clipLimit2D = 0.85f;
-
-	CLAHE * _test = new CLAHE(_dicomImage);
-
-	// Regular 2D CLAHE
-	_claheDicomTexture = _test->CLAHE_2D(numCR, numGrayValsFinal2D, clipLimit2D);
-
-	// Focused 2D CLAHE
+	////////////////////////////////////////////////////////////////////////////
+	// 2D CLAHE - CPU
+	glm::uvec2 numCR = glm::uvec2(2, 2);	
 	glm::uvec2 min2D = glm::uvec2(200, 200);
 	glm::uvec2 max2D = glm::uvec2(400, 400);
-	_focusedDicomTexture = _test->Focused_CLAHE_2D(min2D, max2D, numGrayValsFinal2D, clipLimit2D);
+	unsigned int outputGrayvals_2D = 65536;
+
+	CLAHE * test = new CLAHE(_dicomImage);
+
+	_2D_CLAHE = test->CLAHE_2D(numCR, outputGrayvals_2D, clipLimit2D);
+	_2D_FocusedCLAHE = test->Focused_CLAHE_2D(min2D, max2D, outputGrayvals_2D, clipLimit2D);
 
 	////////////////////////////////////////////////////////////////////////////
 	// 3D CLAHE - Cube Volume 
-	std::cerr << "\n\n3D\n";
+	std::cerr << "\n\n----- Load 3D DICOM -----\n";
 	_dicomCube = new Cube();
 	std::string folderPath = std::string("C:/Users/kroth/Documents/UCSD/Grad/Thesis/clahe_2/Larry_2017");
 	std::string maskPath = std::string("C:/Users/kroth/Documents/UCSD/Grad/Thesis/clahe_2/Larry_2017/mask");
 	ImageLoader* _dicomVolume = new ImageLoader(folderPath, maskPath, false);
 	glm::vec3 volDim = _dicomVolume->GetImageDimensions();
 	_dicomVolumeTexture = _dicomVolume->GetTextureID();
-	_maskTexture = _dicomVolume->GetMaskID();
-
-	// 3D CLAHE
-	//glm::uvec3 numSB = glm::uvec3(2, 2, 1);
-	glm::uvec3 numSB = glm::uvec3(4, 4, 2);
-	//unsigned int finalGrayVals_3D = 256;
-	unsigned int finalGrayVals_3D = 65536;
-	unsigned int ogGrayVals_3D = 65536;
-	//float clipLimit3D = 1.5f;
-	
-	//CLAHE* _volumeTest = new CLAHE(_dicomVolume);
-
-	// Regular 3D CLAHE
-	//_claheDicomVolumeTexture = _volumeTest->CLAHE_3D(numSB, finalGrayVals_3D, 1.0f);
-	////_testVolume = _volumeTest->CLAHE_3D(numSB, finalGrayVals_3D, clipLimit3D);
-	//
-	//// Focused 3D CLAHE
-	//glm::uvec3 min3D = glm::uvec3(200, 200, 40);
-	//glm::uvec3 max3D = glm::uvec3(400, 400, 90);
-	//_focusedDicomVolumeTexture = _volumeTest->Focused_CLAHE_3D(min3D, max3D, finalGrayVals_3D, clipLimit3D);
-	//_testVolume = _volumeTest->Focused_CLAHE_3D(min3D, max3D, finalGrayVals_3D, clipLimit3D);
+	_dicomMaskTexture = _dicomVolume->GetMaskID();
 
 	////////////////////////////////////////////////////////////////////////////
-	// Using Compute Shaders
+	// 3D CLAHE with Compute Shaders
+	unsigned int outputGrayvals_3D = 65536;
+	unsigned int inputGrayvals_3D = 65536;
+	unsigned int numOrgans = 4;
 
-	comp.Init(_dicomVolumeTexture, _maskTexture, volDim, finalGrayVals_3D, ogGrayVals_3D);
-	//comp = ComputeCLAHE(_dicomVolumeTexture, volDim, finalGrayVals_3D, ogGrayVals_3D);
+	comp.Init(_dicomVolumeTexture, _dicomMaskTexture, volDim, outputGrayvals_3D, inputGrayvals_3D, numOrgans);
 
-	_claheDicomVolumeTexture = comp.Compute3D_CLAHE(_claheFullMasked, numSB, clipLimit3D);
-	_claheOnlyMask = comp.Compute3D_CLAHE(_claheFullMasked, numSB, clipLimit3D, true);
-	_claheOnlyMaskv2 = comp.ComputeMasked3D_CLAHE(clipLimit3D);
-	_focusedDicomVolumeTexture = comp.ComputeFocused3D_CLAHE(min3D, max3D, clipLimit3D);
-	
+	_3D_CLAHE = comp.Compute3D_CLAHE(numSB_3D, clipLimit3D);
+	_FocusedCLAHE = comp.ComputeFocused3D_CLAHE(min3D, max3D, clipLimit3D);	
+	_MaskedCLAHE = comp.ComputeMasked3D_CLAHE(clipLimit3D);
 
 	////////////////////////////////////////////////////////////////////////////
 
+	_drawVolume = true;
 	_textureMode = TextureMode::_RAW;
 	_interactionMode = InteractionMode::_MOVE;
 	_currTexture = _dicomVolumeTexture;	// raw dicom
@@ -207,7 +185,7 @@ void SceneManager::ClearScene() {
 	delete _dicomCube;
 
 	// ImageLoaders
-	delete _dicomImage;
+	delete _dicomSlice;
 	delete _dicomVolume;
 
 	glfwDestroyWindow(_window);
@@ -225,6 +203,7 @@ void SceneManager::Update() {
 }
 
 void SceneManager::Draw() {
+
 	// Clear the color and depth buffers
 	glClearColor(0.52f, 0.81f, 0.92f, 0.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -233,10 +212,10 @@ void SceneManager::Draw() {
 	if (_drawVolume) {
 		glEnable(GL_BLEND);
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-		_dicomCube->Draw(_volumeShader, _camera->GetViewProjectMtx(), _camera->GetCamPos(), _currTexture, _maskTexture, _useMask);
+		_dicomCube->Draw(_volumeShader, _camera->GetViewProjectMtx(), _camera->GetCamPos(), _currTexture, _dicomMaskTexture, _useMask);
 	}
 
-	// draw the texture 
+	// draw the slice 
 	else {
 		glUseProgram(_displayShader);
 		glBindVertexArray(_VAO);
@@ -246,10 +225,10 @@ void SceneManager::Draw() {
 				glBindTexture(GL_TEXTURE_2D, _dicomTexture);
 				break;
 			case TextureMode::_CLAHE:
-				glBindTexture(GL_TEXTURE_2D, _claheDicomTexture);
+				glBindTexture(GL_TEXTURE_2D, _2D_CLAHE);
 				break;
 			case TextureMode::_FOCUSED:
-				glBindTexture(GL_TEXTURE_2D, _focusedDicomTexture);
+				glBindTexture(GL_TEXTURE_2D, _2D_FocusedCLAHE);
 				break;
 		}
 		glDrawArrays(GL_TRIANGLES, 0, 3);
@@ -265,7 +244,7 @@ void SceneManager::Draw() {
 void SceneManager::KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
 
 	glm::uvec3 step = glm::uvec3(20, 20, 10);
-	//float clip = 0.95f;
+	float clipStep = 0.05f;
 	GLuint newTexture = 0;
 
 	if (action == GLFW_PRESS) {
@@ -291,69 +270,79 @@ void SceneManager::KeyCallback(GLFWwindow* window, int key, int scancode, int ac
 				_textureMode = TextureMode::_RAW;
 				_currTexture = _dicomVolumeTexture;
 				break;
-			case GLFW_KEY_C:
+			case GLFW_KEY_C: // 3D CLAHE
 				_textureMode = TextureMode::_CLAHE;
-				_currTexture = _claheDicomVolumeTexture;
+				_currTexture = _3D_CLAHE;
 				break;
-			case GLFW_KEY_F:
+			case GLFW_KEY_F: // Focused CLAHE
 				_textureMode = TextureMode::_FOCUSED;
-				_currTexture = _focusedDicomVolumeTexture;
+				_currTexture = _FocusedCLAHE;
 				break;
-			case GLFW_KEY_1:
-				_currTexture = _claheDicomVolumeTexture;
+			case GLFW_KEY_M: // Masked CLAHE 
+				_textureMode = TextureMode::_MASKED;
+				_currTexture = _MaskedCLAHE;
 				break;
-			case GLFW_KEY_2:
-				_currTexture = _claheFullMasked;
-				break;
-			case GLFW_KEY_3:
-				_currTexture = _claheOnlyMask;
-				break;
-			case GLFW_KEY_4:
-				_currTexture = _claheOnlyMaskv2;
-				break;
-			case GLFW_KEY_M:
+			case GLFW_KEY_O: // show just the organs
 				_useMask = !_useMask;
 				break;
 
-			// Change Interaction Mode
+			// Change Interaction Mode for Focused CLAHE
 			case GLFW_KEY_B:
-				if (_interactionMode == InteractionMode::_MOVE) {
-					_interactionMode = InteractionMode::_CHANGE;
-					printf("Interaction Mode: CHANGE BLOCK DIMENSIONS\n");
-				}
-				else {
-					_interactionMode = InteractionMode::_MOVE;
-					printf("Interaction Mode: MOVE BLOCK\n");
+				if (_textureMode == TextureMode::_FOCUSED) {
+					if (_interactionMode == InteractionMode::_MOVE) {
+						_interactionMode = InteractionMode::_CHANGE;
+						printf("Interaction Mode: CHANGE BLOCK DIMENSIONS\n");
+					}
+					else {
+						_interactionMode = InteractionMode::_MOVE;
+						printf("Interaction Mode: MOVE BLOCK\n");
+					}
 				}
 				break;
 
 			// Increase/Decrease the CLip Limit 
 			case GLFW_KEY_EQUAL:
-				if (mods == GLFW_MOD_SHIFT) {
-					clipLimit3D += 0.1f;
-				}				
-				newTexture = comp.ComputeFocused3D_CLAHE(min3D, max3D, clipLimit3D);
-				if (newTexture != 0)
-					_focusedDicomVolumeTexture = newTexture;
+				if (mods == GLFW_MOD_SHIFT) { // '+' Key 
+					clipLimit3D += clipStep;
+				}
+				updateVolume();
 				break;
 			case GLFW_KEY_MINUS:
-				clipLimit3D -= 0.1f;
-				newTexture = comp.ComputeFocused3D_CLAHE(min3D, max3D, clipLimit3D);
-				if (newTexture != 0)
-					_focusedDicomVolumeTexture = newTexture;
+				clipLimit3D -= clipStep;
+				updateVolume();
 				break;
 
-			// Increase/Decrease the number of SB
-			case GLFW_KEY_P:
-				bool result;
-				if (mods == GLFW_MOD_SHIFT) {
-					result = comp.ChangePixelsPerSB(false);
+			// Increase/Decrease the number of SB for CLAHE/Focused CLAHE
+			case GLFW_KEY_S:
+				// inc/dec the number of SB for CLAHE
+				if (_textureMode == TextureMode::_CLAHE) {
+					if (mods == GLFW_MOD_SHIFT) { // inc numSB
+						numSB_3D += glm::uvec3(1, 1, 1);
+						printf("numSB: (%d, %d, %d)\n", numSB_3D.x, numSB_3D.y, numSB_3D.z);
+					}
+					else {
+						numSB_3D -= glm::uvec3(1, 1, 1);
+						if (numSB_3D.x < 1) numSB_3D.x = 1;
+						if (numSB_3D.y < 1) numSB_3D.y = 1;
+						if (numSB_3D.z < 1) numSB_3D.z = 1;
+						printf("numSB: (%d, %d, %d)\n", numSB_3D.x, numSB_3D.y, numSB_3D.z);
+					}
+					_3D_CLAHE = comp.Compute3D_CLAHE(numSB_3D, clipLimit3D);
+					_currTexture = _3D_CLAHE;
 				}
-				else {
-					result = comp.ChangePixelsPerSB(true);
-				}
-				if (result) {
-					_focusedDicomVolumeTexture = comp.ComputeFocused3D_CLAHE(min3D, max3D, clipLimit3D);
+				// inc/dec the number of pixels per SB for Focused CLAHE
+				else if (_textureMode == TextureMode::_FOCUSED) {
+					bool changeOK; 
+					if (mods == GLFW_MOD_SHIFT) { // inc numSB
+						changeOK = comp.ChangePixelsPerSB(false);
+					}
+					else {
+						changeOK = comp.ChangePixelsPerSB(true);
+					}
+					if (changeOK) {
+						_FocusedCLAHE = comp.ComputeFocused3D_CLAHE(min3D, max3D, clipLimit3D);
+						_currTexture = _FocusedCLAHE;
+					}
 				}
 				break;
 
@@ -380,9 +369,10 @@ void SceneManager::KeyCallback(GLFWwindow* window, int key, int scancode, int ac
 					}
 				}
 				newTexture = comp.ComputeFocused3D_CLAHE(min3D, max3D, clipLimit3D);
-				if (newTexture != 0)
-					_focusedDicomVolumeTexture = newTexture;
+				if (newTexture) {
+					_FocusedCLAHE = newTexture;
 					_currTexture = newTexture;
+				}
 				break;
 			case GLFW_KEY_Y:
 				if (mods == GLFW_MOD_SHIFT) {
@@ -406,9 +396,10 @@ void SceneManager::KeyCallback(GLFWwindow* window, int key, int scancode, int ac
 					}
 				}
 				newTexture = comp.ComputeFocused3D_CLAHE(min3D, max3D, clipLimit3D);
-				if (newTexture != 0)
-					_focusedDicomVolumeTexture = newTexture;
+				if (newTexture) {
+					_FocusedCLAHE = newTexture;
 					_currTexture = newTexture;
+				}
 				break;
 			case GLFW_KEY_Z:
 				if (mods == GLFW_MOD_SHIFT) {
@@ -432,9 +423,10 @@ void SceneManager::KeyCallback(GLFWwindow* window, int key, int scancode, int ac
 					}
 				}
 				newTexture = comp.ComputeFocused3D_CLAHE(min3D, max3D, clipLimit3D);
-				if (newTexture != 0)
-					_focusedDicomVolumeTexture = newTexture;
+				if (newTexture) {
+					_FocusedCLAHE = newTexture;
 					_currTexture = newTexture;
+				}
 				break;
 		}
 	}
@@ -498,6 +490,21 @@ void SceneManager::printMat(glm::mat4 toPrint) {
 void SceneManager::printVec(glm::vec3 toPrint) {
 
 	printf("(%.0f, %.0f, %.0f)\n", toPrint.x, toPrint.y, toPrint.z);
+}
+
+void SceneManager::updateVolume() {
+	if (_textureMode == TextureMode::_CLAHE) {
+		_3D_CLAHE = comp.Compute3D_CLAHE(numSB_3D, clipLimit3D);
+		_currTexture = _3D_CLAHE;
+	}
+	else if (_textureMode == TextureMode::_FOCUSED) {
+		_FocusedCLAHE = comp.ComputeFocused3D_CLAHE(min3D, max3D, clipLimit3D);
+		_currTexture = _FocusedCLAHE;
+	}
+	else if (_textureMode == TextureMode::_MASKED) {
+		_MaskedCLAHE = comp.ComputeMasked3D_CLAHE(clipLimit3D);
+		_currTexture = _MaskedCLAHE;
+	}
 }
 
 ////////////////////////////////////////////////////////////////////////////////
